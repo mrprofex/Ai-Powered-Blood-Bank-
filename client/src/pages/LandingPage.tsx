@@ -157,159 +157,117 @@ export function LandingPage({
       </header>
 
       <main>
-        {/* Luxury Architectural Clinical Hero */}
-        <section className="relative overflow-hidden border-b border-[var(--bn-border)] bg-gradient-to-b from-[var(--bn-soft-bg)] via-[var(--bn-surface-elevated)] to-white">
+        {/* Centered clinical network hero */}
+        <section className="relative overflow-hidden border-b border-[var(--bn-border)] bg-gradient-to-b from-[var(--bn-soft-bg)]/70 via-white to-white">
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute inset-0 clinical-dot-grid opacity-55"
+            className="pointer-events-none absolute inset-0 clinical-dot-grid opacity-30"
           />
           <div
             aria-hidden="true"
-            className="pointer-events-none absolute -top-24 right-0 h-96 w-96 rounded-full opacity-35 blur-3xl"
+            className="pointer-events-none absolute -top-24 right-0 h-96 w-96 rounded-full opacity-25 blur-3xl"
             style={{ background: 'radial-gradient(circle, var(--bn-spotlight), transparent 70%)' }}
           />
 
-          <div className="relative z-10 mx-auto max-w-7xl px-4 pt-6 pb-16 sm:px-6 lg:pt-8 lg:pb-20 space-y-10">
+          <div className="relative z-10 mx-auto max-w-7xl space-y-8 px-4 pt-6 pb-12 sm:px-6 lg:pt-8 lg:pb-16">
             <DemoNoticeBanner context="India Healthcare Coordination Foundation" compact variant="light" />
 
-            <div className="grid grid-cols-1 gap-10 lg:grid-cols-12 lg:items-center">
-              <FadeContent className="space-y-6 lg:col-span-6">
-                <div className="inline-flex items-center gap-2 rounded-full border border-[var(--bn-border)] bg-white/85 px-3.5 py-1.5 text-xs font-semibold text-[var(--bn-secondary)] shadow-2xs backdrop-blur-sm">
-                  <Sparkles className="h-3.5 w-3.5 text-[var(--bn-accent)]" aria-hidden="true" />
-                  Predictive Healthcare Coordination · Phase 1 Demo
-                </div>
+            <FadeContent>
+              <div className="relative isolate overflow-hidden rounded-[26px] border border-[var(--bn-accent)]/55 bg-[var(--bn-primary-deep)] shadow-[0_24px_70px_-24px_rgba(14,50,36,0.32)]">
+                {!heroImgError ? (
+                  <motion.img
+                    initial={{ scale: 1.04 }}
+                    animate={{ scale: 1 }}
+                    transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
+                    src="/src/assets/images/hero_green_clinical_network_1795672723523.jpg"
+                    alt="Bright, modern hospital blood bank and coordination center"
+                    referrerPolicy="no-referrer"
+                    onError={() => setHeroImgError(true)}
+                    className="absolute inset-0 -z-20 h-full w-full object-cover"
+                  />
+                ) : (
+                  <div
+                    aria-hidden="true"
+                    className="absolute inset-0 -z-20 bg-gradient-to-br from-[var(--bn-secondary)] to-[var(--bn-primary-deep)]"
+                  />
+                )}
+                <div
+                  aria-hidden="true"
+                  className="absolute inset-0 -z-10 bg-gradient-to-b from-[var(--bn-primary-deep)]/50 via-[var(--bn-primary-deep)]/55 to-[var(--bn-primary-deep)]/80"
+                />
 
-                <h1 className="font-display text-3xl font-semibold tracking-tight text-[var(--bn-text)] sm:text-5xl lg:text-[54px] leading-[1.06]">
-                  <BlurText text="Predict Shortages." />{' '}
-                  <span className="text-[var(--bn-primary)]">
-                    <BlurText text="Coordinate Faster." delay={0.08} />
-                  </span>
-                </h1>
+                <div className="flex min-h-[500px] flex-col items-center justify-center px-5 py-12 text-center text-white sm:px-10 sm:py-14 lg:min-h-[530px]">
+                  <div className="inline-flex items-center gap-2 rounded-full border border-white/25 bg-black/10 px-3.5 py-1.5 text-xs font-semibold text-[var(--bn-accent-soft)] backdrop-blur-sm">
+                    <Sparkles className="h-3.5 w-3.5 text-[var(--bn-accent)]" aria-hidden="true" />
+                    Predictive Healthcare Coordination · Phase 1 Demo
+                  </div>
 
-                <p className="max-w-xl text-base leading-relaxed text-[var(--bn-muted)] sm:text-lg">
-                  Unite licensed blood banks and hospital transfusion services in one calm command
-                  platform. Detect low days-of-cover early, prioritize near-expiry units, and route
-                  verified inventory across India.
-                </p>
+                  <h1 className="mt-6 max-w-4xl font-display text-4xl font-semibold leading-[1.05] tracking-tight text-white sm:text-6xl lg:text-7xl">
+                    <BlurText text="Predict Shortages." />{' '}
+                    <span className="text-[var(--bn-accent)]">
+                      <BlurText text="Coordinate Faster." delay={0.08} />
+                    </span>
+                  </h1>
 
-                <div className="flex flex-wrap items-center gap-3.5 pt-1">
-                  <Magnet>
+                  <p className="mt-5 max-w-2xl text-sm leading-relaxed text-white/85 sm:text-base">
+                    Unite licensed blood banks and hospital transfusion services in one calm command
+                    platform. Detect shortages early and coordinate verified inventory across India.
+                  </p>
+
+                  <div className="mt-7 flex flex-wrap items-center justify-center gap-3">
+                    <Magnet>
+                      <button
+                        type="button"
+                        onClick={() => onNavigate('login')}
+                        className="clinical-btn inline-flex min-h-[46px] items-center gap-2 rounded-full bg-[var(--bn-accent)] px-6 py-2.5 text-sm font-semibold text-[var(--bn-primary-deep)] hover:brightness-105 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white"
+                      >
+                        Sign In to Workspace
+                        <ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      </button>
+                    </Magnet>
                     <button
                       type="button"
-                      onClick={() => onNavigate('login')}
-                      className="clinical-btn inline-flex min-h-[46px] items-center gap-2 rounded-lg bg-[var(--bn-primary)] px-6 py-2.5 text-sm font-semibold text-white hover:bg-[var(--bn-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--bn-primary)] whitespace-nowrap shrink-0 shadow-[0_10px_24px_-8px_rgba(14,50,36,0.45)]"
+                      onClick={() => openPortal('PUBLIC', 'availability')}
+                      className="clinical-btn inline-flex min-h-[46px] items-center gap-2 rounded-full border border-white/40 bg-white/10 px-6 py-2.5 text-sm font-semibold text-white backdrop-blur-sm hover:bg-white/20"
                     >
-                      Sign In to Workspace
-                      <ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      <Search className="h-4 w-4 shrink-0" aria-hidden="true" />
+                      Search Availability
                     </button>
-                  </Magnet>
-                  <button
-                    type="button"
-                    onClick={() => openPortal('PUBLIC', 'availability')}
-                    className="clinical-btn inline-flex min-h-[46px] items-center gap-2 rounded-lg border border-[var(--bn-border)] bg-white px-6 py-2.5 text-sm font-semibold text-[var(--bn-text)] hover:border-[var(--bn-primary)]/40 hover:bg-[var(--bn-soft-bg)] whitespace-nowrap shrink-0"
-                  >
-                    <Search className="h-4 w-4 shrink-0 text-[var(--bn-primary)]" aria-hidden="true" />
-                    Search Availability
-                  </button>
-                </div>
-              </FadeContent>
-
-              <FadeContent delay={0.08} className="lg:col-span-6">
-                <div className="relative overflow-hidden rounded-2xl border border-[var(--bn-border)] bg-white shadow-[0_22px_54px_-16px_rgba(14,50,36,0.16)]">
-                  <div className="relative overflow-hidden">
-                    {!heroImgError ? (
-                      <motion.img
-                        initial={{ scale: 1.04 }}
-                        animate={{ scale: 1 }}
-                        transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
-                        src="/src/assets/images/hero_green_clinical_network_1795672723523.jpg"
-                        alt="Clean hospital blood coordination center in daylight"
-                        referrerPolicy="no-referrer"
-                        onError={() => setHeroImgError(true)}
-                        className="h-[320px] sm:h-[380px] w-full object-cover"
-                      />
-                    ) : (
-                      <div className="flex h-[320px] sm:h-[380px] items-center justify-center bg-[var(--bn-soft-bg)] p-8 text-center text-sm text-[var(--bn-muted)]">
-                        Clinical Blood Bank Coordination Architecture
-                      </div>
-                    )}
-
-                    {/* Floating Glass Telemetry Overlay */}
-                    <motion.div
-                      initial={{ opacity: 0, y: 12 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ duration: 0.45, delay: 0.22, ease: [0.16, 1, 0.3, 1] }}
-                      className="glass-surface absolute bottom-4 left-4 right-4 sm:right-auto sm:w-80 rounded-xl p-3.5 shadow-lg"
-                    >
-                      <div className="flex items-center justify-between text-[11px]">
-                        <span className="font-semibold uppercase tracking-wider text-[var(--bn-primary)]">
-                          72h Horizon · DEMO DATA
-                        </span>
-                        <span className="font-mono-tabular font-semibold text-[#C93440]">
-                          2 Critical Groups
-                        </span>
-                      </div>
-                      <div className="mt-2 flex items-baseline justify-between">
-                        <span className="font-display text-sm font-semibold text-[var(--bn-text)]">
-                          O- &amp; B- Priority Dispatch
-                        </span>
-                        <span className="font-mono-tabular text-xs font-semibold text-[var(--bn-secondary)]">
-                          24m Avg ETA
-                        </span>
-                      </div>
-                    </motion.div>
                   </div>
 
-                  <div className="flex flex-wrap items-center justify-between gap-3 border-t border-[var(--bn-border)] bg-white px-5 py-3.5 text-xs">
-                    <span className="font-medium text-[var(--bn-text)]">
-                      Regional Cold-Chain Corridor Visibility
-                    </span>
-                    <span className="font-mono-tabular text-[var(--bn-secondary)]">
-                      Avg Dispatch: 24 mins · DEMO DATA
-                    </span>
+                  <div className="mt-10 grid w-full max-w-4xl grid-cols-2 gap-y-5 border-t border-white/20 pt-6 sm:grid-cols-4 sm:gap-0">
+                    <div className="px-3 sm:border-r sm:border-white/20">
+                      <p className="font-mono-tabular text-2xl font-semibold text-[var(--bn-accent)] sm:text-3xl">
+                        <AnimatedCounter value={kpis.registeredHospitals} />
+                      </p>
+                      <p className="mt-1 text-[11px] text-white/75 sm:text-xs">Hospitals · DEMO</p>
+                    </div>
+                    <div className="px-3 sm:border-r sm:border-white/20">
+                      <p className="font-mono-tabular text-2xl font-semibold text-[var(--bn-accent)] sm:text-3xl">
+                        <AnimatedCounter value={kpis.registeredBloodBanks} />
+                      </p>
+                      <p className="mt-1 text-[11px] text-white/75 sm:text-xs">Blood Banks · DEMO</p>
+                    </div>
+                    <div className="px-3 sm:border-r sm:border-white/20">
+                      <p className="font-mono-tabular text-2xl font-semibold text-[var(--bn-accent)] sm:text-3xl">
+                        <AnimatedCounter value={kpis.availableBloodUnits} />
+                      </p>
+                      <p className="mt-1 text-[11px] text-white/75 sm:text-xs">Tracked Units · DEMO</p>
+                    </div>
+                    <div className="px-3">
+                      <p className="font-mono-tabular text-2xl font-semibold text-[var(--bn-accent)] sm:text-3xl">
+                        <AnimatedCounter value={kpis.activeEmergencyRequests} />
+                      </p>
+                      <p className="mt-1 text-[11px] text-white/75 sm:text-xs">Emergency Requests · DEMO</p>
+                    </div>
                   </div>
                 </div>
-              </FadeContent>
-            </div>
-
-            {/* 4-Metric Animated Spotlight KPI Strip */}
-            <div className="grid grid-cols-2 gap-4 pt-2 lg:grid-cols-4">
-              <SpotlightCard className="rounded-xl p-5">
-                <p className="text-xs font-medium text-[var(--bn-muted)]">Registered Hospitals</p>
-                <p className="mt-2 text-3xl font-semibold text-[var(--bn-primary)]">
-                  <AnimatedCounter value={kpis.registeredHospitals} />
-                </p>
-                <p className="mt-1 text-[11px] text-[var(--bn-muted)]">DEMO DATA · Multi-State</p>
-              </SpotlightCard>
-              <SpotlightCard className="rounded-xl p-5">
-                <p className="text-xs font-medium text-[var(--bn-muted)]">Licensed Blood Banks</p>
-                <p className="mt-2 text-3xl font-semibold text-[var(--bn-text)]">
-                  <AnimatedCounter value={kpis.registeredBloodBanks} />
-                </p>
-                <p className="mt-1 text-[11px] text-[var(--bn-muted)]">DEMO DATA · Verified</p>
-              </SpotlightCard>
-              <SpotlightCard className="rounded-xl p-5">
-                <p className="text-xs font-medium text-[var(--bn-muted)]">Tracked Component Units</p>
-                <p className="mt-2 text-3xl font-semibold text-[var(--bn-text)]">
-                  <AnimatedCounter value={kpis.availableBloodUnits} />
-                </p>
-                <p className="mt-1 text-[11px] text-[var(--bn-muted)]">DEMO DATA · Expiry-Tracked</p>
-              </SpotlightCard>
-              <SpotlightCard
-                className="rounded-xl border-[#C93440]/25 p-5"
-                spotlightColor="rgba(201, 52, 64, 0.12)"
-              >
-                <p className="text-xs font-medium text-[var(--bn-muted)]">Active Emergency Requests</p>
-                <p className="mt-2 text-3xl font-semibold text-[#C93440]">
-                  <AnimatedCounter value={kpis.activeEmergencyRequests} />
-                </p>
-                <p className="mt-1 text-[11px] text-[var(--bn-muted)]">DEMO DATA · 72h Horizon</p>
-              </SpotlightCard>
-            </div>
+              </div>
+            </FadeContent>
           </div>
 
           {/* Smooth Infinite Regional Corridor Telemetry Ticker */}
-          <div className="bn-marquee-group border-t border-[var(--bn-border)] bg-white/80 py-2.5 backdrop-blur-sm overflow-hidden">
+          <div className="bn-marquee-group border-t border-[var(--bn-border)] bg-white/90 py-2.5 backdrop-blur-sm overflow-hidden">
             <div className="bn-marquee-track items-center gap-8 px-4 text-xs">
               {[...regionalOverview, ...regionalOverview].map((hub, index) => (
                 <button
