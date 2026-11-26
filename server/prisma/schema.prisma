@@ -1,0 +1,365 @@
+// Prisma Schema Draft — Phase 1 Foundation (Configuration Only)
+// Target Database: Neon PostgreSQL (Connection Pooled + Direct Migration URL)
+// Do NOT run migrations until Phase 2 Neon PostgreSQL credentials are configured.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_DATABASE_URL")
+}
+
+enum UserRole {
+  PUBLIC
+  HOSPITAL_COORDINATOR
+  BLOOD_BANK_OFFICER
+  ADMIN
+}
+
+enum OrganizationType {
+  HOSPITAL
+  BLOOD_BANK
+}
+
+enum VerificationStatus {
+  PENDING
+  VERIFIED
+  REJECTED
+  SUSPENDED
+}
+
+enum BloodGroup {
+  O_POS
+  O_NEG
+  A_POS
+  A_NEG
+  B_POS
+  B_NEG
+  AB_POS
+  AB_NEG
+}
+
+enum BloodComponent {
+  WHOLE_BLOOD
+  PRBC
+  PLATELETS
+  FFP
+  CRYO
+}
+
+enum InventorySourceType {
+  VERIFIED_MANUAL
+  ERAKTKOSH_SYNC
+  DEMO_SYNTHETIC
+}
+
+enum RequestUrgency {
+  CRITICAL
+  HIGH
+  ROUTINE
+}
+
+enum RequestStatus {
+  OPEN
+  MATCHED
+  ALLOCATED
+  FULFILLED
+  CANCELLED
+}
+
+enum RiskLevel {
+  LOW
+  MODERATE
+  CRITICAL
+}
+
+model User {
+  id             String       @id @default(cuid())
+  email          String       @unique
+  fullName       String       @map("full_name")
+  passwordHash   String?      @map("password_hash")
+  googleSubject  String?      @unique @map("google_subject")
+  role           UserRole     @default(PUBLIC)
+  organizationId String?      @map("organization_id")
+  isActive       Boolean      @default(true) @map("is_active")
+  lastLoginAt    DateTime?    @map("last_login_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+  updatedAt      DateTime     @updatedAt @map("updated_at")
+
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+  auditLogs      AuditLog[]
+  notifications  Notification[]
+  bloodRequests  BloodRequest[] @relation("RequestedByUser")
+
+  @@index([organizationId])
+  @@index([role])
+  @@map("users")
+}
+
+model Organization {
+  id               String            @id @default(cuid())
+  name             String
+  registrationCode String            @unique @map("registration_code")
+  type             OrganizationType
+  contactEmail     String            @map("contact_email")
+  contactPhone     String            @map("contact_phone")
+  locationId       String            @map("location_id")
+  isVerified       Boolean           @default(false) @map("is_verified")
+  createdAt        DateTime          @default(now()) @map("created_at")
+  updatedAt        DateTime          @updatedAt @map("updated_at")
+
+  location         Location          @relation(fields: [locationId], references: [id])
+  users            User[]
+  verifications    OrganizationVerification[]
+  hospital         Hospital?
+  bloodBank        BloodBank?
+  auditLogs        AuditLog[]
+
+  @@index([type, isVerified])
+  @@index([locationId])
+  @@map("organizations")
+}
+
+model OrganizationVerification {
+  id                 String             @id @default(cuid())
+  organizationId     String             @map("organization_id")
+  licenseNumber      String             @map("license_number")
+  issuingAuthority   String             @map("issuing_authority")
+  status             VerificationStatus @default(PENDING)
+  reviewerNotes      String?            @map("reviewer_notes")
+  reviewedByUserId   String?            @map("reviewed_by_user_id")
+  reviewedAt         DateTime?          @map("reviewed_at")
+  createdAt          DateTime           @default(now()) @map("created_at")
+  updatedAt          DateTime           @updatedAt @map("updated_at")
+
+  organization       Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId, status])
+  @@map("organization_verifications")
+}
+
+model Hospital {
+  id              String         @id @default(cuid())
+  organizationId  String         @unique @map("organization_id")
+  bedCapacity     Int            @map("bed_capacity")
+  traumaLevel     String?        @map("trauma_level")
+  hasBloodStorage Boolean        @default(true) @map("has_blood_storage")
+  createdAt       DateTime       @default(now()) @map("created_at")
+  updatedAt       DateTime       @updatedAt @map("updated_at")
+
+  organization    Organization   @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  bloodRequests   BloodRequest[]
+
+  @@map("hospitals")
+}
+
+model BloodBank {
+  id                   String               @id @default(cuid())
+  organizationId       String               @unique @map("organization_id")
+  componentSeparation  Boolean              @default(true) @map("component_separation")
+  storageCapacityUnits Int                  @map("storage_capacity_units")
+  operatingHours       String               @default("24x7") @map("operating_hours")
+  createdAt            DateTime             @default(now()) @map("created_at")
+  updatedAt            DateTime             @updatedAt @map("updated_at")
+
+  organization         Organization         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  inventories          BloodInventory[]
+  inventoryHistory     InventoryHistory[]
+  requestMatches       BloodRequestMatch[]
+  shortagePredictions  ShortagePrediction[]
+
+  @@map("blood_banks")
+}
+
+model Location {
+  id            String         @id @default(cuid())
+  state         String
+  district      String
+  city          String
+  pinCode       String?        @map("pin_code")
+  latitude      Float
+  longitude     Float
+  createdAt     DateTime       @default(now()) @map("created_at")
+
+  organizations Organization[]
+  predictions   ShortagePrediction[]
+
+  @@unique([state, district, city])
+  @@index([state, city])
+  @@map("locations")
+}
+
+model BloodInventory {
+  id               String              @id @default(cuid())
+  bloodBankId      String              @map("blood_bank_id")
+  bloodGroup       BloodGroup          @map("blood_group")
+  component        BloodComponent
+  unitsAvailable   Int                 @map("units_available")
+  unitsReserved    Int                 @default(0) @map("units_reserved")
+  batchCode        String              @map("batch_code")
+  expiresAt        DateTime            @map("expires_at")
+  sourceType       InventorySourceType @default(DEMO_SYNTHETIC) @map("source_type")
+  dataSourceId     String?             @map("data_source_id")
+  isVerified       Boolean             @default(false) @map("is_verified")
+  lastUpdatedAt    DateTime            @default(now()) @map("last_updated_at")
+  createdAt        DateTime            @default(now()) @map("created_at")
+
+  bloodBank        BloodBank           @relation(fields: [bloodBankId], references: [id], onDelete: Cascade)
+  dataSource       DataSource?         @relation(fields: [dataSourceId], references: [id], onDelete: SetNull)
+
+  @@unique([bloodBankId, batchCode])
+  @@index([bloodGroup, component])
+  @@index([expiresAt])
+  @@map("blood_inventory")
+}
+
+model InventoryHistory {
+  id           String         @id @default(cuid())
+  bloodBankId  String         @map("blood_bank_id")
+  bloodGroup   BloodGroup     @map("blood_group")
+  component    BloodComponent
+  deltaUnits   Int            @map("delta_units")
+  reason       String
+  recordedById String?        @map("recorded_by_id")
+  recordedAt   DateTime       @default(now()) @map("recorded_at")
+
+  bloodBank    BloodBank      @relation(fields: [bloodBankId], references: [id], onDelete: Cascade)
+
+  @@index([bloodBankId, bloodGroup, recordedAt])
+  @@map("inventory_history")
+}
+
+model BloodRequest {
+  id               String              @id @default(cuid())
+  hospitalId       String              @map("hospital_id")
+  requestedById    String              @map("requested_by_id")
+  bloodGroup       BloodGroup          @map("blood_group")
+  component        BloodComponent
+  unitsRequested   Int                 @map("units_requested")
+  urgency          RequestUrgency
+  status           RequestStatus       @default(OPEN)
+  requiredBy       DateTime            @map("required_by")
+  clinicalNote     String?             @map("clinical_note")
+  createdAt        DateTime            @default(now()) @map("created_at")
+  updatedAt        DateTime            @updatedAt @map("updated_at")
+
+  hospital         Hospital            @relation(fields: [hospitalId], references: [id], onDelete: Cascade)
+  requestedBy      User                @relation("RequestedByUser", fields: [requestedById], references: [id])
+  matches          BloodRequestMatch[]
+
+  @@index([status, urgency])
+  @@index([hospitalId, createdAt])
+  @@map("blood_requests")
+}
+
+model BloodRequestMatch {
+  id             String       @id @default(cuid())
+  requestId      String       @map("request_id")
+  bloodBankId    String       @map("blood_bank_id")
+  matchedUnits   Int          @map("matched_units")
+  distanceKm     Float        @map("distance_km")
+  priorityScore  Float        @map("priority_score")
+  accepted       Boolean?
+  respondedAt    DateTime?    @map("responded_at")
+  createdAt      DateTime     @default(now()) @map("created_at")
+
+  request        BloodRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  bloodBank      BloodBank    @relation(fields: [bloodBankId], references: [id], onDelete: Cascade)
+
+  @@unique([requestId, bloodBankId])
+  @@index([priorityScore])
+  @@map("blood_request_matches")
+}
+
+model ShortagePrediction {
+  id                  String         @id @default(cuid())
+  locationId          String         @map("location_id")
+  bloodBankId         String?        @map("blood_bank_id")
+  bloodGroup          BloodGroup     @map("blood_group")
+  component           BloodComponent
+  currentUnits        Int            @map("current_units")
+  dailyConsumption    Float          @map("daily_consumption")
+  daysOfCover         Float          @map("days_of_cover")
+  expiringSoonUnits   Int            @map("expiring_soon_units")
+  riskScore           Int            @map("risk_score")
+  riskLevel           RiskLevel      @map("risk_level")
+  horizonHours        Int            @default(72) @map("horizon_hours")
+  aiExplanation       String?        @map("ai_explanation")
+  modelVersion        String         @map("model_version")
+  isSyntheticDemo     Boolean        @default(false) @map("is_synthetic_demo")
+  computedAt          DateTime       @default(now()) @map("computed_at")
+
+  location            Location       @relation(fields: [locationId], references: [id])
+  bloodBank           BloodBank?     @relation(fields: [bloodBankId], references: [id], onDelete: SetNull)
+
+  @@index([locationId, bloodGroup, riskLevel])
+  @@index([computedAt])
+  @@map("shortage_predictions")
+}
+
+model Notification {
+  id          String    @id @default(cuid())
+  userId      String    @map("user_id")
+  title       String
+  message     String
+  category    String
+  isRead      Boolean   @default(false) @map("is_read")
+  createdAt   DateTime  @default(now()) @map("created_at")
+
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, isRead, createdAt])
+  @@map("notifications")
+}
+
+model DataSource {
+  id             String              @id @default(cuid())
+  name           String              @unique
+  sourceType     InventorySourceType @map("source_type")
+  endpointUrl    String?             @map("endpoint_url")
+  isActive       Boolean             @default(true) @map("is_active")
+  lastSyncedAt   DateTime?           @map("last_synced_at")
+  createdAt      DateTime            @default(now()) @map("created_at")
+
+  inventories    BloodInventory[]
+  syncLogs       SyncLog[]
+
+  @@map("data_sources")
+}
+
+model SyncLog {
+  id             String     @id @default(cuid())
+  dataSourceId   String     @map("data_source_id")
+  status         String
+  recordsSynced  Int        @default(0) @map("records_synced")
+  errorSummary   String?    @map("error_summary")
+  startedAt      DateTime   @default(now()) @map("started_at")
+  completedAt    DateTime?  @map("completed_at")
+
+  dataSource     DataSource @relation(fields: [dataSourceId], references: [id], onDelete: Cascade)
+
+  @@index([dataSourceId, startedAt])
+  @@map("sync_logs")
+}
+
+model AuditLog {
+  id             String        @id @default(cuid())
+  userId         String?       @map("user_id")
+  organizationId String?       @map("organization_id")
+  action         String
+  resourceType   String        @map("resource_type")
+  resourceId     String        @map("resource_id")
+  metadataJson   Json?         @map("metadata_json")
+  ipAddressHash  String?       @map("ip_address_hash")
+  createdAt      DateTime      @default(now()) @map("created_at")
+
+  user           User?         @relation(fields: [userId], references: [id], onDelete: SetNull)
+  organization   Organization? @relation(fields: [organizationId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, createdAt])
+  @@index([action, createdAt])
+  @@map("audit_logs")
+}

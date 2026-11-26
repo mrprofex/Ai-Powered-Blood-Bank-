@@ -1,0 +1,144 @@
+@import "tailwindcss";
+@custom-variant dark (&:where(.dark, .dark *));
+
+@layer base {
+  :root {
+    --font-display: 'Plus Jakarta Sans', system-ui, -apple-system, sans-serif;
+    --font-sans: 'DM Sans', system-ui, -apple-system, sans-serif;
+    --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, monospace;
+
+    --bn-primary: #0E3224;
+    --bn-primary-deep: #092218;
+    --bn-secondary: #1D593E;
+    --bn-accent: #B8863B;
+    --bn-accent-soft: #FBF6EC;
+    --bn-bg: #FFFFFF;
+    --bn-soft-bg: #F3F6F2;
+    --bn-surface-elevated: #FAFBF9;
+    --bn-text: #142019;
+    --bn-muted: #516359;
+    --bn-border: #DAE2DA;
+    --bn-border-hover: #AFC1B3;
+    --bn-sidebar-text: #DCE6DF;
+    --bn-sidebar-muted: #9BB8A6;
+    --bn-glow: rgba(29, 89, 62, 0.16);
+    --bn-spotlight: rgba(184, 134, 59, 0.12);
+    --bn-critical: #C93440;
+    --bn-watch: #B45309;
+  }
+
+  html {
+    font-family: var(--font-sans);
+    background-color: var(--bn-bg);
+    color: var(--bn-text);
+    scroll-behavior: smooth;
+  }
+
+  h1, h2, h3, h4, .font-display {
+    font-family: var(--font-display);
+    text-wrap: balance;
+    letter-spacing: -0.025em;
+  }
+
+  .font-mono-tabular {
+    font-family: var(--font-mono);
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Luxury clinical surfaces */
+.clinical-card {
+  background-color: var(--bn-bg);
+  border: 1px solid var(--bn-border);
+  box-shadow:
+    0 1px 2px rgba(14, 50, 36, 0.03),
+    0 8px 24px -12px rgba(14, 50, 36, 0.06);
+  transition:
+    transform 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    box-shadow 220ms cubic-bezier(0.16, 1, 0.3, 1),
+    border-color 200ms ease,
+    background-color 250ms ease;
+}
+
+.clinical-card-interactive:hover {
+  transform: translateY(-3px);
+  box-shadow:
+    0 12px 32px -10px rgba(14, 50, 36, 0.11),
+    0 2px 6px rgba(14, 50, 36, 0.04);
+  border-color: var(--bn-border-hover);
+}
+
+.clinical-btn {
+  transition:
+    transform 140ms cubic-bezier(0.16, 1, 0.3, 1),
+    background-color 160ms ease,
+    border-color 160ms ease,
+    box-shadow 180ms ease,
+    color 160ms ease;
+}
+
+.clinical-btn:active {
+  transform: scale(0.982);
+}
+
+.glass-surface {
+  background: rgba(255, 255, 255, 0.84);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+  border: 1px solid color-mix(in srgb, var(--bn-border) 88%, white);
+}
+
+/* Architectural clinical dot-grid texture */
+.clinical-dot-grid {
+  background-image: radial-gradient(
+    color-mix(in srgb, var(--bn-primary) 16%, transparent) 1px,
+    transparent 1px
+  );
+  background-size: 22px 22px;
+}
+
+/* Champagne gold editorial hairline */
+.accent-hairline {
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--bn-accent) 50%,
+    transparent 100%
+  );
+}
+
+/* Smooth infinite corridor ticker */
+@keyframes bn-marquee {
+  0% {
+    transform: translate3d(0, 0, 0);
+  }
+  100% {
+    transform: translate3d(-50%, 0, 0);
+  }
+}
+
+.bn-marquee-track {
+  display: flex;
+  width: max-content;
+  animation: bn-marquee 34s linear infinite;
+}
+
+.bn-marquee-group:hover .bn-marquee-track {
+  animation-play-state: paused;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .bn-marquee-track {
+    animation: none !important;
+  }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}

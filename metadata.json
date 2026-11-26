@@ -1,0 +1,6 @@
+{
+  "name": "Predictive Emergency Blood Shortage Network",
+  "description": "AI-powered healthcare coordination platform designed to monitor blood inventory, predict regional shortages, and coordinate emergency blood availability across hospitals and blood banks in India.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
