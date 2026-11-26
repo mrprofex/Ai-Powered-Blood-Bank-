@@ -34,6 +34,38 @@ export default defineConfig(() => {
         '@shared': path.resolve(__dirname, 'shared'),
       },
     },
+    build: {
+      rollupOptions: {
+        output: {
+          manualChunks: (id: string) => {
+            if (id.includes('node_modules')) {
+              if (id.includes('react') || id.includes('react-dom') || id.includes('react-is')) {
+                return 'vendor-react';
+              }
+              if (id.includes('recharts')) {
+                return 'vendor-charts';
+              }
+              if (id.includes('@googlemaps') || id.includes('google')) {
+                return 'vendor-maps';
+              }
+              if (id.includes('three') || id.includes('ogl')) {
+                return 'vendor-3d';
+              }
+              if (id.includes('motion')) {
+                return 'vendor-motion';
+              }
+              if (id.includes('lucide-react') || id.includes('@headlessui')) {
+                return 'vendor-ui';
+              }
+              return 'vendor';
+            }
+          },
+        },
+      },
+      chunkSizeWarningLimit: 600,
+      cssCodeSplit: true,
+      minify: 'esbuild',
+    },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modify—file watching is disabled to prevent flickering during agent edits.

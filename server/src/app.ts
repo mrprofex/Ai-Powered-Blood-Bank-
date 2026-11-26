@@ -6,6 +6,7 @@ import {
 import {
   corsMiddleware,
   securityHeadersMiddleware,
+  securityAuditMiddleware,
 } from './middleware/security.ts';
 import {
   createAuthRateLimiter,
@@ -20,6 +21,7 @@ export function createApiApp(): express.Express {
   app.set('trust proxy', 1);
   app.use(securityHeadersMiddleware);
   app.use(corsMiddleware);
+  app.use(securityAuditMiddleware);
   app.use(express.json({ limit: '64kb' }));
   app.use(express.urlencoded({ extended: false, limit: '64kb' }));
 

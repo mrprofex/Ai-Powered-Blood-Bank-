@@ -3,7 +3,7 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Blood Network — Predictive Emergency Blood Shortage Coordination</title>
+    <title>Blood Network — Emergency Blood Shortage Coordination</title>
     <meta
       name="description"
       content="Minimalist healthcare coordination platform designed to monitor blood inventory, predict regional shortages, and coordinate emergency blood availability across hospitals and blood banks in India."
@@ -17,13 +17,29 @@
     <meta name="twitter:card" content="summary_large_image" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="preconnect" href="https://maps.googleapis.com" crossorigin />
+    <link rel="dns-prefetch" href="https://maps.gstatic.com" />
     <link
       href="https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,400..700;1,9..40,400..700&family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@500;600;700&display=swap"
       rel="stylesheet"
     />
+    <style>
+      /* Critical CSS for focus visibility */
+      :focus-visible { outline: 2px solid #123D2B; outline-offset: 2px; }
+      :focus:not(:focus-visible) { outline: none; }
+      .skip-link { position: absolute; top: -100%; left: 50%; transform: translateX(-50%); padding: 12px 24px; background: #123D2B; color: white; z-index: 10000; border-radius: 0 0 8px 8px; text-decoration: none; font-weight: 600; }
+      .skip-link:focus { top: 0; }
+    </style>
   </head>
   <body class="bg-white text-[#17231C] antialiased selection:bg-[#123D2B] selection:text-white">
+    <a href="#main-content" class="skip-link">Skip to main content</a>
     <div id="root"></div>
+    <noscript>
+      <div style="padding: 24px; text-align: center; background: #fef2f2; border: 1px solid #fecaca; color: #991b1b; font-family: system-ui;">
+        <h1>JavaScript Required</h1>
+        <p>Blood Network requires JavaScript to function. Please enable JavaScript in your browser settings.</p>
+      </div>
+    </noscript>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
