@@ -142,8 +142,6 @@ function getInitialProgressForStatus(status: DemoHospitalRequestRecord['status']
       return 0.68;
     case 'DISPATCHED':
       return 0.86;
-    case 'COMPLETED':
-      return 1;
     default:
       return 0.35;
   }

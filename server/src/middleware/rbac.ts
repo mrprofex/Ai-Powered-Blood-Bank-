@@ -9,6 +9,8 @@ export interface DemoActorContext {
   role: UserRole;
   userName: string;
   institutionName: string;
+  city?: string;
+  state?: string;
 }
 
 export function extractDemoActor(req: Request): DemoActorContext {
@@ -21,8 +23,10 @@ export function extractDemoActor(req: Request): DemoActorContext {
   const institutionName = String(
     req.header('x-demo-institution') ?? 'Public Portal Session (Demo)',
   ).slice(0, 150);
+  const city = String(req.header('x-demo-city') ?? '').trim().slice(0, 80);
+  const state = String(req.header('x-demo-state') ?? '').trim().slice(0, 80);
 
-  return { role, userName, institutionName };
+  return { role, userName, institutionName, city, state };
 }
 
 export function requireRole(allowedRoles: UserRole[], actionLabel: string) {

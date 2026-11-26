@@ -65,6 +65,106 @@ export interface BloodInventoryRecord {
   isDemoData: true;
 }
 
+export interface BloodInventoryBatchRecord {
+  id: string;
+  batchCode: string;
+  organizationName: string;
+  facilityType: 'BLOOD_BANK' | 'HOSPITAL_BLOOD_CENTER';
+  city: string;
+  state: string;
+  latitude: number | null;
+  longitude: number | null;
+  bloodGroup: BloodGroup;
+  component: BloodComponent;
+  unitsAvailable: number;
+  unitsReserved: number;
+  storageUnit: string;
+  expiryDate: string;
+  sourceStatus: DataSourceStatus;
+  sourceLabel: string;
+  lastUpdatedAt: string;
+  isDemoData: true;
+}
+
+export interface NearbyBloodBankMatch {
+  bloodBankName: string;
+  city: string;
+  state: string;
+  distanceKm: number;
+  availableUnits: number;
+  requestedUnits: number;
+  canFulfillRequest: boolean;
+  estimatedTravelMinutes: number;
+  earliestExpiry: string;
+  isDemoData: true;
+}
+
+export interface ShortageForecastItem {
+  bloodGroup: BloodGroup;
+  component: BloodComponent;
+  currentUnits: number;
+  dailyConsumptionEstimate: number;
+  daysOfCover: number;
+  expiringWithin72h: number;
+  projected7DayDemand: number;
+  projected30DayDemand: number;
+  projected7DayDeficit: number;
+  projected30DayDeficit: number;
+  riskScore: number;
+  riskLevel: RiskLevel;
+  explanation: string;
+  region: string;
+  isDemoData: true;
+}
+
+export type ShortagePredictionMode =
+  | 'RULES_BASED_DEMO'
+  | 'GEMINI_ASSISTED_DEMO'
+  | 'GEMINI_ERROR_RULES_FALLBACK';
+
+export interface ShortagePredictionResponse {
+  predictionMode: ShortagePredictionMode;
+  isDemoData: true;
+  disclaimer: string;
+  aiSummary: string;
+  computedAt: string;
+  data: ShortageForecastItem[];
+}
+
+export interface InventoryExpiryAlert {
+  batchCode: string;
+  bloodBankName: string;
+  city: string;
+  state: string;
+  bloodGroup: BloodGroup;
+  component: BloodComponent;
+  unitsAvailable: number;
+  expiryDate: string;
+  hoursUntilExpiry: number;
+  status: 'EXPIRED' | 'EXPIRING';
+  isDemoData: true;
+}
+
+export interface OrganizationConnectionSummary {
+  organizationId: string;
+  organizationName: string;
+  type: 'HOSPITAL' | 'BLOOD_BANK';
+  city: string;
+  state: string;
+  status: 'NOT_CONFIGURED' | 'PENDING' | 'CONNECTED' | 'STALE' | 'ERROR' | 'DEMO_ONLY';
+  lastSyncAt: string | null;
+  isStale: boolean;
+  sourceLabel: string;
+  isDemoData: true;
+}
+
+export interface IntegrationReadiness {
+  provider: 'HOSPITAL_SYSTEM' | 'BLOOD_BANK_SYSTEM' | 'ERAKTKOSH' | 'GEMINI';
+  status: 'NOT_CONFIGURED' | 'CONFIGURED_NOT_VERIFIED' | 'READY_FOR_AUTHORIZED_SETUP';
+  configured: boolean;
+  message: string;
+}
+
 export interface DemoActivityItem {
   id: string;
   title: string;
@@ -148,6 +248,7 @@ export interface DemoHospitalRequestRecord {
   createdAt: string;
   createdBy: string;
   notes?: string;
+  matchingCandidates?: NearbyBloodBankMatch[];
   isDemoData: true;
 }
 

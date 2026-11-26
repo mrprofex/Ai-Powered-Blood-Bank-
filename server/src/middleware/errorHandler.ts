@@ -31,18 +31,21 @@ export const centralizedErrorHandler: ErrorRequestHandler = (err, req, res, _nex
       ? err.message
       : 'An unexpected server error occurred. Please try again later.';
 
-  // Structured server-side logging without leaking details to the client
-  console.error(
-    JSON.stringify({
-      level: 'error',
-      method: req.method,
-      path: req.path,
-      statusCode,
-      errorName: err instanceof Error ? err.name : 'UnknownError',
-      detail: env.NODE_ENV === 'development' && err instanceof Error ? err.message : undefined,
-      timestamp: new Date().toISOString(),
-    }),
-  );
+  const errorDetails: Record<string, unknown> = {
+    level: 'error',
+    method: req.method,
+    path: req.path,
+    statusCode,
+    errorName: err instanceof Error ? err.name : 'UnknownError',
+    timestamp: new Date().toISOString(),
+  };
+
+  if (env.NODE_ENV === 'development' && err instanceof Error) {
+    errorDetails.message = err.message;
+    errorDetails.stack = err.stack;
+  }
+
+  console.error(JSON.stringify(errorDetails));
 
   res.status(statusCode).json({
     status: 'error',

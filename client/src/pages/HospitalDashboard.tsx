@@ -296,6 +296,8 @@ export function CreateBloodRequestView({ demoUser, onNavigate }: HospitalWorkspa
   const [unitsNeeded, setUnitsNeeded] = useState<number>(4);
   const [urgency, setUrgency] = useState<'CRITICAL' | 'HIGH' | 'ROUTINE'>('HIGH');
   const [city, setCity] = useState<string>(demoUser.city || 'Bengaluru');
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
   const [notes, setNotes] = useState<string>('');
   const [submitting, setSubmitting] = useState(false);
   const [createdRecord, setCreatedRecord] = useState<DemoHospitalRequestRecord | null>(null);
@@ -316,6 +318,8 @@ export function CreateBloodRequestView({ demoUser, onNavigate }: HospitalWorkspa
       unitsNeeded,
       urgency,
       city,
+      latitude: latitude ? Number(latitude) : undefined,
+      longitude: longitude ? Number(longitude) : undefined,
       notes: notes || undefined,
     });
 
@@ -477,6 +481,39 @@ export function CreateBloodRequestView({ demoUser, onNavigate }: HospitalWorkspa
               </div>
             </div>
 
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <div>
+                <label htmlFor="req-latitude" className="block text-xs font-medium text-[#17231C]">
+                  Latitude (Optional)
+                </label>
+                <input
+                  id="req-latitude"
+                  type="number"
+                  min="-90"
+                  max="90"
+                  step="any"
+                  value={latitude}
+                  onChange={(e) => setLatitude(e.target.value)}
+                  className="mt-1.5 block w-full min-h-[40px] rounded-lg border border-[#DCE3DC] bg-[#F2F5F1] px-3 py-2 text-sm text-[#17231C] focus:border-[#123D2B] focus:bg-white focus:outline-none"
+                />
+              </div>
+              <div>
+                <label htmlFor="req-longitude" className="block text-xs font-medium text-[#17231C]">
+                  Longitude (Optional)
+                </label>
+                <input
+                  id="req-longitude"
+                  type="number"
+                  min="-180"
+                  max="180"
+                  step="any"
+                  value={longitude}
+                  onChange={(e) => setLongitude(e.target.value)}
+                  className="mt-1.5 block w-full min-h-[40px] rounded-lg border border-[#DCE3DC] bg-[#F2F5F1] px-3 py-2 text-sm text-[#17231C] focus:border-[#123D2B] focus:bg-white focus:outline-none"
+                />
+              </div>
+            </div>
+
             {errorMsg ? (
               <p role="alert" className="text-xs font-medium text-[#C93440]">
                 {errorMsg}
@@ -492,6 +529,21 @@ export function CreateBloodRequestView({ demoUser, onNavigate }: HospitalWorkspa
                       {createdRecord.id} Submitted · Status: {createdRecord.status}
                     </p>
                     <p className="text-[#55655C]">{resultMsg}</p>
+                    <p className="font-semibold text-[#17231C]">Nearby inventory candidates (demo):</p>
+                    {createdRecord.matchingCandidates?.length ? (
+                      <ul className="list-disc space-y-1 pl-4 text-[#55655C]">
+                        {createdRecord.matchingCandidates.map((match) => (
+                          <li key={`${match.bloodBankName}-${match.city}-${match.distanceKm}`}>
+                            {match.bloodBankName} — {match.availableUnits}u, {match.distanceKm} km
+                            {match.canFulfillRequest ? ' · can fulfill request' : ' · insufficient units'}
+                          </li>
+                        ))}
+                      </ul>
+                    ) : (
+                      <p className="text-[#55655C]">
+                        No nearby matching stock was found. Unknown city names require explicit coordinates.
+                      </p>
+                    )}
                     <button
                       type="button"
                       onClick={() => onNavigate('hospital-request-tracking')}

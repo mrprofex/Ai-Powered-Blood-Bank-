@@ -2,9 +2,13 @@ import { useState } from 'react';
 import type { FormEvent } from 'react';
 import { ArrowLeft, CheckCircle2, Droplets, Info, ShieldCheck } from 'lucide-react';
 import { INDIAN_STATES_DEMO } from '../../../shared/constants/bloodNetwork.ts';
-import { DemoSignupInputSchema } from '../../../shared/schemas/networkSchemas.ts';
+import {
+  DemoSignupInputSchema,
+  OrganizationOnboardingSchema,
+} from '../../../shared/schemas/networkSchemas.ts';
 import type { DemoSessionUser } from '../../../shared/types/network.ts';
 import { FadeContent, Magnet } from '../components/motion/MotionPrimitives.tsx';
+import { submitOrganizationOnboarding } from '../services/networkApi.ts';
 import type { AppPage } from '../types/navigation.ts';
 
 interface SignupPageProps {
@@ -22,30 +26,63 @@ export function SignupPage({ onNavigate, onDemoAuthenticate }: SignupPageProps) 
     'HOSPITAL_COORDINATOR',
   );
   const [licenseReference, setLicenseReference] = useState('');
+  const [contactPhone, setContactPhone] = useState('');
+  const [bedCapacity, setBedCapacity] = useState('');
+  const [storageCapacityUnits, setStorageCapacityUnits] = useState('');
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [submittedDemo, setSubmittedDemo] = useState(false);
+  const [onboardingResult, setOnboardingResult] = useState<{
+    organizationId: string;
+    verificationId: string;
+  } | null>(null);
+  const [submitting, setSubmitting] = useState(false);
   const [visualError, setVisualError] = useState(false);
 
-  const handleSubmit = (event: FormEvent) => {
+  const handleSubmit = async (event: FormEvent) => {
     event.preventDefault();
     setErrorMsg(null);
+    setSubmitting(true);
+    try {
+      if (role === 'PUBLIC') {
+        const parsed = DemoSignupInputSchema.safeParse({
+          fullName,
+          organizationName,
+          email,
+          city,
+          state,
+          role,
+          licenseReference: licenseReference || undefined,
+        });
+        if (!parsed.success) {
+          throw new Error(parsed.error.issues[0]?.message ?? 'Please review the registration form.');
+        }
+        setSubmittedDemo(true);
+        return;
+      }
 
-    const parsed = DemoSignupInputSchema.safeParse({
-      fullName,
-      organizationName,
-      email,
-      city,
-      state,
-      role,
-      licenseReference: licenseReference || undefined,
-    });
-
-    if (!parsed.success) {
-      setErrorMsg(parsed.error.issues[0]?.message ?? 'Please review the registration form.');
-      return;
+      const parsed = OrganizationOnboardingSchema.safeParse({
+        fullName,
+        organizationName,
+        contactEmail: email,
+        contactPhone,
+        organizationType: role === 'BLOOD_BANK_OFFICER' ? 'BLOOD_BANK' : 'HOSPITAL',
+        licenseNumber: licenseReference,
+        city,
+        state,
+        bedCapacity: role === 'HOSPITAL_COORDINATOR' ? bedCapacity : undefined,
+        storageCapacityUnits:
+          role === 'BLOOD_BANK_OFFICER' ? storageCapacityUnits : undefined,
+      });
+      if (!parsed.success) {
+        throw new Error(parsed.error.issues[0]?.message ?? 'Please review the registration form.');
+      }
+      const result = await submitOrganizationOnboarding(parsed.data);
+      setOnboardingResult(result);
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : 'Unable to submit registration.');
+    } finally {
+      setSubmitting(false);
     }
-
-    setSubmittedDemo(true);
   };
 
   return (
@@ -109,7 +146,7 @@ export function SignupPage({ onNavigate, onDemoAuthenticate }: SignupPageProps) 
         <div className="relative z-10 hidden lg:flex items-center justify-between border-t border-white/15 pt-5 text-xs text-[#B8D0C0]">
           <span className="inline-flex items-center gap-1.5">
             <ShieldCheck className="h-4 w-4 text-white" aria-hidden="true" />
-            Zero PII Persisted in Phase 1
+            No PostgreSQL Persistence
           </span>
           <span className="font-mono-tabular">DEMO MODE</span>
         </div>
@@ -147,13 +184,36 @@ export function SignupPage({ onNavigate, onDemoAuthenticate }: SignupPageProps) 
           >
             <Info className="mt-0.5 h-4 w-4 shrink-0 text-[#123D2B]" aria-hidden="true" />
             <p className="leading-relaxed">
-              <span className="font-semibold text-[#17231C]">Demo Onboarding Notice:</span> Form
-              validation uses shared Zod rules without persisting accounts to PostgreSQL. Real
-              institutional verification activates in Phases 2 &amp; 6.
+              <span className="font-semibold text-[#17231C]">Demo Onboarding Notice:</span>{' '}
+              Institutional submissions are validated and queued in server memory for this demo
+              session. They are not durable accounts; admin verification and production
+              authentication still require database and identity-provider configuration.
             </p>
           </div>
 
-          {submittedDemo ? (
+          {onboardingResult ? (
+            <div className="space-y-4 rounded-xl border border-[#1D593E]/30 bg-[#F2F5F1] p-6">
+              <div className="flex items-center gap-2 text-[#123D2B] font-semibold text-sm">
+                <CheckCircle2 className="h-5 w-5 shrink-0 text-[#1D593E]" aria-hidden="true" />
+                Registration queued for verification
+              </div>
+              <p className="text-sm text-[#55655C] leading-relaxed">
+                <span className="font-semibold text-[#17231C]">{organizationName}</span> was
+                submitted for admin review. This demo submission is held in server memory and does
+                not create a sign-in account.
+              </p>
+              <p className="font-mono-tabular text-xs text-[#55655C]">
+                Verification reference: {onboardingResult.verificationId}
+              </p>
+              <button
+                type="button"
+                onClick={() => onNavigate('login')}
+                className="clinical-btn w-full min-h-[44px] rounded-lg border border-[#DCE3DC] bg-white px-5 py-2.5 text-sm font-semibold text-[#123D2B] hover:bg-[#F2F5F1]"
+              >
+                Return to sign-in
+              </button>
+            </div>
+          ) : submittedDemo ? (
             <div className="space-y-4 rounded-xl border border-[#1D593E]/30 bg-[#F2F5F1] p-6">
               <div className="flex items-center gap-2 text-[#123D2B] font-semibold text-sm">
                 <CheckCircle2 className="h-5 w-5 shrink-0 text-[#1D593E]" aria-hidden="true" />
@@ -161,8 +221,8 @@ export function SignupPage({ onNavigate, onDemoAuthenticate }: SignupPageProps) 
               </div>
               <p className="text-sm text-[#55655C] leading-relaxed">
                 <span className="font-semibold text-[#17231C]">{organizationName}</span> ({city},{' '}
-                {state}) passed Phase 1 Zod validation. Continue into the demo workspace to preview
-                portal workflows.
+                {state}) passed demo validation. This public flow does not create an institutional
+                account.
               </p>
               <Magnet className="w-full">
                 <button
@@ -261,11 +321,12 @@ export function SignupPage({ onNavigate, onDemoAuthenticate }: SignupPageProps) 
                 </div>
                 <div>
                   <label htmlFor="signup-license" className="block text-xs font-semibold text-[#17231C]">
-                    SBTC / CDSCO License (Optional)
+                    SBTC / CDSCO License {role === 'PUBLIC' ? '(Optional)' : '(Required)'}
                   </label>
                   <input
                     id="signup-license"
                     type="text"
+                    required={role !== 'PUBLIC'}
                     value={licenseReference}
                     onChange={(e) => setLicenseReference(e.target.value)}
                     className="mt-1.5 block w-full min-h-[40px] rounded-lg border border-[#DCE3DC] bg-white px-3 py-2 text-sm text-[#17231C] placeholder:text-[#7D8C83] focus:border-[#123D2B] focus:outline-none focus:ring-2 focus:ring-[#123D2B]/15"
@@ -273,6 +334,67 @@ export function SignupPage({ onNavigate, onDemoAuthenticate }: SignupPageProps) 
                   />
                 </div>
               </div>
+
+              {role !== 'PUBLIC' ? (
+                <>
+                  <div>
+                    <label
+                      htmlFor="signup-phone"
+                      className="block text-xs font-semibold text-[#17231C]"
+                    >
+                      Official Contact Phone
+                    </label>
+                    <input
+                      id="signup-phone"
+                      type="tel"
+                      required
+                      value={contactPhone}
+                      onChange={(e) => setContactPhone(e.target.value)}
+                      className="mt-1.5 block w-full min-h-[40px] rounded-lg border border-[#DCE3DC] bg-white px-3 py-2 text-sm text-[#17231C] placeholder:text-[#7D8C83] focus:border-[#123D2B] focus:outline-none focus:ring-2 focus:ring-[#123D2B]/15"
+                      placeholder="+91 98765 43210"
+                    />
+                  </div>
+                  {role === 'HOSPITAL_COORDINATOR' ? (
+                    <div>
+                      <label
+                        htmlFor="signup-beds"
+                        className="block text-xs font-semibold text-[#17231C]"
+                      >
+                        Hospital Bed Capacity
+                      </label>
+                      <input
+                        id="signup-beds"
+                        type="number"
+                        min="1"
+                        max="200000"
+                        required
+                        value={bedCapacity}
+                        onChange={(e) => setBedCapacity(e.target.value)}
+                        className="mt-1.5 block w-full min-h-[40px] rounded-lg border border-[#DCE3DC] bg-white px-3 py-2 text-sm text-[#17231C]"
+                      />
+                    </div>
+                  ) : (
+                    <div>
+                      <label
+                        htmlFor="signup-storage"
+                        className="block text-xs font-semibold text-[#17231C]"
+                      >
+                        Blood Bank Storage Capacity (Units)
+                      </label>
+                      <input
+                        id="signup-storage"
+                        type="number"
+                        min="1"
+                        max="200000"
+                        required
+                        value={storageCapacityUnits}
+                        onChange={(e) => setStorageCapacityUnits(e.target.value)}
+                        className="mt-1.5 block w-full min-h-[40px] rounded-lg border border-[#DCE3DC] bg-white px-3 py-2 text-sm text-[#17231C]"
+                      />
+                    </div>
+                  )}
+                </>
+              ) : null}
 
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                 <div>
@@ -320,9 +442,14 @@ export function SignupPage({ onNavigate, onDemoAuthenticate }: SignupPageProps) 
               <Magnet className="w-full">
                 <button
                   type="submit"
+                  disabled={submitting}
                   className="clinical-btn w-full min-h-[44px] rounded-lg bg-[#123D2B] px-5 py-2.5 text-sm font-semibold text-white hover:bg-[#1D593E]"
                 >
-                  Validate Demo Registration
+                  {submitting
+                    ? 'Submitting registration...'
+                    : role === 'PUBLIC'
+                      ? 'Validate Demo Registration'
+                      : 'Submit for Admin Verification'}
                 </button>
               </Magnet>
             </form>

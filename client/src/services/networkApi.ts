@@ -4,6 +4,8 @@ import type {
   AvailabilityQueryInput,
   BloodStockUpdateInput,
   DemoRequestValidationInput,
+  InventoryBatchImportInput,
+  OrganizationOnboardingInput,
   RequestStatusUpdateInput,
 } from '../../../shared/schemas/networkSchemas.ts';
 import type {
@@ -14,7 +16,12 @@ import type {
   DemoStockMovement,
   DemoVerificationRecord,
   HealthCheckResponse,
+  BloodInventoryBatchRecord,
+  IntegrationReadiness,
+  InventoryExpiryAlert,
   NetworkSummaryResponse,
+  OrganizationConnectionSummary,
+  ShortagePredictionResponse,
 } from '../../../shared/types/network.ts';
 
 function buildActorHeaders(user: DemoSessionUser): HeadersInit {
@@ -77,6 +84,40 @@ export async function fetchBloodAvailability(
     records: payload.data,
     disclaimer: payload.meta.disclaimer,
   };
+}
+
+export async function fetchShortagePredictions(
+  user: DemoSessionUser,
+): Promise<ShortagePredictionResponse> {
+  const response = await fetch('/api/v1/network/predictions', {
+    headers: buildActorHeaders(user),
+  });
+  const payload = (await response.json()) as {
+    message?: string;
+    data?: ShortagePredictionResponse;
+  };
+  if (!response.ok || !payload.data) {
+    throw new Error(payload.message ?? 'Unable to load shortage predictions');
+  }
+  return payload.data;
+}
+
+export async function submitOrganizationOnboarding(
+  input: OrganizationOnboardingInput,
+): Promise<{ organizationId: string; verificationId: string; status: 'PENDING' }> {
+  const response = await fetch('/api/v1/onboarding/organizations', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(input),
+  });
+  const payload = (await response.json()) as {
+    message?: string;
+    data?: { organizationId: string; verificationId: string; status: 'PENDING' };
+  };
+  if (!response.ok || !payload.data) {
+    throw new Error(payload.message ?? 'Unable to submit organization registration');
+  }
+  return payload.data;
 }
 
 export async function checkDemoEmergencyRequest(
@@ -205,6 +246,57 @@ export async function submitBloodStockUpdate(
   };
 }
 
+export async function fetchInventoryBatches(
+  user: DemoSessionUser,
+): Promise<BloodInventoryBatchRecord[]> {
+  const response = await fetch('/api/v1/inventory/batches', {
+    headers: buildActorHeaders(user),
+  });
+  const payload = (await response.json()) as {
+    message?: string;
+    data?: BloodInventoryBatchRecord[];
+  };
+  if (!response.ok || !payload.data) {
+    throw new Error(payload.message ?? 'Unable to load inventory batches');
+  }
+  return payload.data;
+}
+
+export async function importInventoryBatchesApi(
+  user: DemoSessionUser,
+  input: InventoryBatchImportInput,
+): Promise<BloodInventoryBatchRecord[]> {
+  const response = await fetch('/api/v1/inventory/import', {
+    method: 'POST',
+    headers: buildActorHeaders(user),
+    body: JSON.stringify(input),
+  });
+  const payload = (await response.json()) as {
+    message?: string;
+    data?: BloodInventoryBatchRecord[];
+  };
+  if (!response.ok || !payload.data) {
+    throw new Error(payload.message ?? 'Unable to import inventory batches');
+  }
+  return payload.data;
+}
+
+export async function fetchInventoryExpiryAlerts(
+  user: DemoSessionUser,
+): Promise<InventoryExpiryAlert[]> {
+  const response = await fetch('/api/v1/inventory/alerts', {
+    headers: buildActorHeaders(user),
+  });
+  const payload = (await response.json()) as {
+    message?: string;
+    data?: InventoryExpiryAlert[];
+  };
+  if (!response.ok || !payload.data) {
+    throw new Error(payload.message ?? 'Unable to load inventory expiry alerts');
+  }
+  return payload.data;
+}
+
 export async function fetchAuditLogsApi(
   user: DemoSessionUser,
 ): Promise<DemoAuditLogEntry[]> {
@@ -245,6 +337,27 @@ export interface AdminDirectoryResponse {
     status: 'ACTIVE' | 'SUSPENDED' | 'UNDER_REVIEW';
     isDemoData: true;
   }>;
+}
+
+export interface AdminConnectionsResponse {
+  connections: OrganizationConnectionSummary[];
+  integrations: IntegrationReadiness[];
+}
+
+export async function fetchAdminConnectionsApi(
+  user: DemoSessionUser,
+): Promise<AdminConnectionsResponse> {
+  const response = await fetch('/api/v1/admin/connections', {
+    headers: buildActorHeaders(user),
+  });
+  const payload = (await response.json()) as {
+    message?: string;
+    data?: AdminConnectionsResponse;
+  };
+  if (!response.ok || !payload.data) {
+    throw new Error(payload.message ?? 'Unable to load integration connections');
+  }
+  return payload.data;
 }
 
 export async function fetchAdminDirectoryApi(

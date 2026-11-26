@@ -5,17 +5,27 @@ import {
   AvailabilityQuerySchema,
   BloodStockUpdateSchema,
   DemoRequestValidationSchema,
+  InventoryBatchImportSchema,
+  NearbyMatchQuerySchema,
+  OrganizationOnboardingSchema,
   RequestStatusUpdateSchema,
 } from '../../../shared/schemas/networkSchemas.ts';
 import { getHealthStatus } from '../controllers/healthController.ts';
 import {
   getBloodAvailability,
+  getNetworkPredictions,
   getNetworkSummary,
   validateDemoRequest,
 } from '../controllers/networkController.ts';
 import {
   createHospitalRequest,
+  createOrganizationOnboarding,
+  getInventoryBatches,
+  getInventoryExpiryAlerts,
+  getNearbyInventoryMatches,
+  importInventory,
   listAdminDirectory,
+  listAdminConnections,
   listAuditLogs,
   listHospitalRequests,
   listStockMovements,
@@ -40,10 +50,25 @@ apiRouter.get(
   getBloodAvailability,
 );
 
+apiRouter.get(
+  '/v1/network/predictions',
+  requireRole(
+    ['HOSPITAL_COORDINATOR', 'BLOOD_BANK_OFFICER', 'ADMIN'],
+    'VIEW_SHORTAGE_PREDICTIONS',
+  ),
+  getNetworkPredictions,
+);
+
 apiRouter.post(
   '/v1/network/demo-request-check',
   validateRequest({ body: DemoRequestValidationSchema }),
   validateDemoRequest,
+);
+
+apiRouter.post(
+  '/v1/onboarding/organizations',
+  validateRequest({ body: OrganizationOnboardingSchema }),
+  createOrganizationOnboarding,
 );
 
 // Role-Based Operations Endpoints (Server-Side RBAC + Audit Log Enforced)
@@ -73,12 +98,38 @@ apiRouter.get(
   listStockMovements,
 );
 
+apiRouter.get(
+  '/v1/inventory/batches',
+  requireRole(['BLOOD_BANK_OFFICER', 'ADMIN'], 'VIEW_BLOOD_INVENTORY'),
+  getInventoryBatches,
+);
+
+apiRouter.get(
+  '/v1/inventory/alerts',
+  requireRole(['BLOOD_BANK_OFFICER', 'ADMIN'], 'VIEW_INVENTORY_EXPIRY_ALERTS'),
+  getInventoryExpiryAlerts,
+);
+
+apiRouter.post(
+  '/v1/inventory/import',
+  requireRole(['BLOOD_BANK_OFFICER'], 'IMPORT_BLOOD_INVENTORY'),
+  validateRequest({ body: InventoryBatchImportSchema }),
+  importInventory,
+);
+
 // Strictly Blood Bank Officer only — Hospital Coordinators and even Admins cannot directly alter bank stock
 apiRouter.post(
   '/v1/inventory/update',
   requireRole(['BLOOD_BANK_OFFICER'], 'UPDATE_BLOOD_INVENTORY'),
   validateRequest({ body: BloodStockUpdateSchema }),
   recordBloodStockUpdate,
+);
+
+apiRouter.get(
+  '/v1/matching/nearby',
+  requireRole(['HOSPITAL_COORDINATOR', 'ADMIN'], 'MATCH_NEARBY_BLOOD_BANKS'),
+  validateRequest({ query: NearbyMatchQuerySchema }),
+  getNearbyInventoryMatches,
 );
 
 apiRouter.get(
@@ -91,6 +142,12 @@ apiRouter.get(
   '/v1/admin/directory',
   requireRole(['ADMIN'], 'VIEW_ADMIN_DIRECTORY'),
   listAdminDirectory,
+);
+
+apiRouter.get(
+  '/v1/admin/connections',
+  requireRole(['ADMIN'], 'VIEW_INTEGRATION_CONNECTIONS'),
+  listAdminConnections,
 );
 
 apiRouter.post(

@@ -18,8 +18,10 @@ import {
   FALLBACK_DEMO_SUMMARY,
 } from '../data/demoPortalData.ts';
 import {
+  fetchAdminConnectionsApi,
   fetchApiHealth,
   fetchNetworkSummary,
+  type AdminConnectionsResponse,
 } from '../services/networkApi.ts';
 import type { AppPage } from '../types/navigation.ts';
 import {
@@ -43,15 +45,30 @@ interface AdminDashboardProps {
 export function AdminDashboard({ demoUser, onNavigate }: AdminDashboardProps) {
   const [summary, setSummary] = useState<NetworkSummaryResponse>(FALLBACK_DEMO_SUMMARY);
   const [health, setHealth] = useState<HealthCheckResponse | null>(null);
+  const [connections, setConnections] = useState<AdminConnectionsResponse | null>(null);
+  const [connectionsError, setConnectionsError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     let active = true;
-    Promise.allSettled([fetchNetworkSummary(), fetchApiHealth()])
-      .then(([summaryRes, healthRes]) => {
+    Promise.allSettled([
+      fetchNetworkSummary(),
+      fetchApiHealth(),
+      fetchAdminConnectionsApi(demoUser),
+    ])
+      .then(([summaryRes, healthRes, connectionsRes]) => {
         if (!active) return;
         if (summaryRes.status === 'fulfilled') setSummary(summaryRes.value);
         if (healthRes.status === 'fulfilled') setHealth(healthRes.value);
+        if (connectionsRes.status === 'fulfilled') {
+          setConnections(connectionsRes.value);
+        } else {
+          setConnectionsError(
+            connectionsRes.reason instanceof Error
+              ? connectionsRes.reason.message
+              : 'Unable to load integration status.',
+          );
+        }
       })
       .finally(() => {
         if (active) setLoading(false);
@@ -59,7 +76,7 @@ export function AdminDashboard({ demoUser, onNavigate }: AdminDashboardProps) {
     return () => {
       active = false;
     };
-  }, []);
+  }, [demoUser]);
 
   const criticalGroupsCount = summary.bloodGroupOverview.filter(
     (item) => item.riskLevel === 'CRITICAL',
@@ -246,6 +263,77 @@ export function AdminDashboard({ demoUser, onNavigate }: AdminDashboardProps) {
             {health?.integrations.eraktkoshConfigured ? 'Authorized' : 'Awaiting MoHFW Credentials'}
           </p>
           <p className="mt-1 text-xs text-[#55655C]">Strict adapter boundary; zero scraping</p>
+        </div>
+      </section>
+
+      <section className="clinical-card overflow-hidden rounded-xl">
+        <div className="border-b border-[#DCE3DC] px-5 py-4">
+          <h3 className="font-display text-sm font-semibold text-[#17231C]">
+            Organization Connections &amp; Integration Readiness
+          </h3>
+          <p className="mt-1 text-xs text-[#55655C]">
+            Demo directory entries are not live integrations. No organization sync has run in this
+            environment.
+          </p>
+        </div>
+        {connectionsError ? (
+          <p role="alert" className="p-5 text-sm text-[#C93440]">{connectionsError}</p>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm">
+              <thead className="border-b border-[#DCE3DC] bg-[#F2F5F1] text-xs font-medium text-[#55655C]">
+                <tr>
+                  <th className="px-5 py-3">Organization</th>
+                  <th className="px-4 py-3">Type / Location</th>
+                  <th className="px-4 py-3">Connection</th>
+                  <th className="px-4 py-3">Last Sync</th>
+                  <th className="px-5 py-3">Data Freshness</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-[#DCE3DC]">
+                {(connections?.connections ?? []).map((connection) => (
+                  <tr key={connection.organizationId}>
+                    <td className="px-5 py-3 font-medium text-[#17231C]">
+                      {connection.organizationName}
+                    </td>
+                    <td className="px-4 py-3 text-xs text-[#55655C]">
+                      {connection.type.replace('_', ' ')} · {connection.city}, {connection.state}
+                    </td>
+                    <td className="px-4 py-3">
+                      <span className="rounded-full bg-[#F2F5F1] px-2.5 py-1 text-[11px] font-semibold text-[#55655C]">
+                        {connection.status.replace('_', ' ')}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 font-mono-tabular text-xs text-[#55655C]">
+                      {connection.lastSyncAt
+                        ? new Date(connection.lastSyncAt).toLocaleString('en-IN')
+                        : 'Never synced'}
+                    </td>
+                    <td className="px-5 py-3 text-xs text-[#55655C]">
+                      {connection.isStale
+                        ? 'STALE'
+                        : connection.lastSyncAt
+                          ? 'Within configured window'
+                          : 'No sync; freshness unknown'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+        <div className="grid grid-cols-1 gap-3 border-t border-[#DCE3DC] p-5 sm:grid-cols-2 xl:grid-cols-4">
+          {(connections?.integrations ?? []).map((integration) => (
+            <div key={integration.provider} className="rounded-lg border border-[#DCE3DC] bg-[#F2F5F1] p-3">
+              <p className="text-xs font-semibold text-[#17231C]">{integration.provider.replace('_', ' ')}</p>
+              <p className="mt-1 text-[11px] font-medium text-[#1D593E]">
+                {integration.status.replace(/_/g, ' ')}
+              </p>
+              <p className="mt-1 text-[11px] leading-relaxed text-[#55655C]">
+                {integration.message}
+              </p>
+            </div>
+          ))}
         </div>
       </section>
 

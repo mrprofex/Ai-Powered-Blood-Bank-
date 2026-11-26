@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import type { FormEvent } from 'react';
+import type { ChangeEvent, FormEvent } from 'react';
 import {
   AlertTriangle,
   ArrowRight,
@@ -20,15 +20,21 @@ import {
   type StockMovementType,
 } from '../../../shared/constants/bloodNetwork.ts';
 import { BloodStockUpdateSchema } from '../../../shared/schemas/networkSchemas.ts';
-import type { DemoSessionUser, DemoStockMovement } from '../../../shared/types/network.ts';
+import type {
+  BloodInventoryBatchRecord,
+  DemoSessionUser,
+  DemoStockMovement,
+  InventoryExpiryAlert,
+  NetworkSummaryResponse,
+} from '../../../shared/types/network.ts';
+import { fetchNetworkSummary, fetchStockMovements } from '../services/networkApi.ts';
 import {
-  DEMO_BLOOD_BANK_BATCHES,
-  FALLBACK_DEMO_SUMMARY,
-} from '../data/demoPortalData.ts';
-import {
-  fetchStockMovements,
+  fetchInventoryBatches,
+  fetchInventoryExpiryAlerts,
+  importInventoryBatchesApi,
   submitBloodStockUpdate,
 } from '../services/networkApi.ts';
+import { parseInventoryImportFile } from '../services/inventoryFileParser.ts';
 import type { AppPage } from '../types/navigation.ts';
 import { Magnet } from '../components/motion/MotionPrimitives.tsx';
 import {
@@ -45,10 +51,60 @@ const MOVEMENT_LABELS: Record<StockMovementType, string> = {
 };
 
 export function BankInventoryOverviewView({
+  demoUser,
   onNavigate,
 }: {
+  demoUser: DemoSessionUser;
   onNavigate: (page: AppPage) => void;
 }) {
+  const [batches, setBatches] = useState<BloodInventoryBatchRecord[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+  const [importMessage, setImportMessage] = useState<string | null>(null);
+  const [importing, setImporting] = useState(false);
+
+  useEffect(() => {
+    let active = true;
+    fetchInventoryBatches(demoUser)
+      .then((rows) => {
+        if (active) setBatches(rows);
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setErrorMsg(error instanceof Error ? error.message : 'Unable to load inventory batches.');
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [demoUser]);
+
+  const handleImportFile = async (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (!file) return;
+    setErrorMsg(null);
+    setImportMessage(null);
+    setImporting(true);
+    try {
+      const payload = await parseInventoryImportFile(file);
+      const saved = await importInventoryBatchesApi(demoUser, payload);
+      const refreshed = await fetchInventoryBatches(demoUser);
+      setBatches(refreshed);
+      setImportMessage(`Imported ${saved.length} validated batch rows into this demo session.`);
+    } catch (error) {
+      setErrorMsg(error instanceof Error ? error.message : 'Inventory import failed.');
+    } finally {
+      setImporting(false);
+      input.value = '';
+    }
+  };
+
+  const isAuthorized = demoUser.role === 'BLOOD_BANK_OFFICER';
+
   return (
     <div className="space-y-6">
       <section className="clinical-card overflow-hidden rounded-xl">
@@ -58,7 +114,7 @@ export function BankInventoryOverviewView({
               Cold-Vault Batch Overview
             </h2>
             <p className="text-xs text-[#55655C]">
-              DEMO DATA · Active component storage batches and reserve status
+              DEMO DATA · Current server-session batches, availability and expiry
             </p>
           </div>
           <button
@@ -71,6 +127,30 @@ export function BankInventoryOverviewView({
           </button>
         </div>
 
+        <div className="border-b border-[#DCE3DC] bg-[#F2F5F1] px-5 py-4">
+          <label htmlFor="inventory-import" className="block text-xs font-semibold text-[#17231C]">
+            Import inventory (.csv or .xlsx)
+          </label>
+          <p className="mt-1 text-[11px] text-[#55655C]">
+            Required columns: batchCode, bloodGroup, component, unitsAvailable, expiryDate,
+            storageUnit, city, state. Optional: latitude, longitude.
+          </p>
+          <input
+            id="inventory-import"
+            type="file"
+            accept=".csv,.xlsx"
+            disabled={!isAuthorized || importing}
+            onChange={handleImportFile}
+            className="mt-2 block w-full text-xs text-[#55655C] file:mr-3 file:rounded-md file:border-0 file:bg-white file:px-3 file:py-2 file:text-xs file:font-semibold file:text-[#123D2B] disabled:opacity-50"
+          />
+          {!isAuthorized ? (
+            <p className="mt-1 text-xs text-[#C93440]">Blood Bank Officer role required to import.</p>
+          ) : null}
+          {importing ? <p className="mt-2 text-xs text-[#55655C]">Validating and importing...</p> : null}
+          {importMessage ? <p role="status" className="mt-2 text-xs text-[#1D593E]">{importMessage}</p> : null}
+          {errorMsg ? <p role="alert" className="mt-2 text-xs text-[#C93440]">{errorMsg}</p> : null}
+        </div>
+
         <div className="overflow-x-auto">
           <table className="w-full text-left text-sm">
             <thead className="border-b border-[#DCE3DC] bg-[#F2F5F1] text-xs font-medium text-[#55655C]">
@@ -79,12 +159,18 @@ export function BankInventoryOverviewView({
                 <th className="px-4 py-3">Blood Group · Component</th>
                 <th className="px-4 py-3 text-right">Available / Reserved</th>
                 <th className="px-4 py-3">Storage Rack</th>
-                <th className="px-4 py-3 text-right">Expiry Window</th>
+                <th className="px-4 py-3 text-right">Expiry Date</th>
                 <th className="px-5 py-3">Status</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-[#DCE3DC]">
-              {DEMO_BLOOD_BANK_BATCHES.map((batch) => (
+              {batches.map((batch) => {
+                const hoursToExpiry = Math.floor(
+                  (new Date(`${batch.expiryDate}T23:59:59.999Z`).getTime() - Date.now()) /
+                    (60 * 60 * 1000),
+                );
+                const riskLevel = hoursToExpiry <= 72 ? 'CRITICAL' : 'LOW';
+                return (
                 <tr key={batch.batchCode} className="hover:bg-[#F2F5F1]/60">
                   <td className="px-5 py-3.5 font-mono-tabular text-xs font-semibold text-[#17231C]">
                     {batch.batchCode}
@@ -98,19 +184,28 @@ export function BankInventoryOverviewView({
                     </span>
                   </td>
                   <td className="px-4 py-3.5 text-right font-mono-tabular text-xs text-[#17231C]">
-                    {batch.unitsAvailable} avail · {batch.unitsReserved} res
+                    {batch.unitsAvailable - batch.unitsReserved} avail · {batch.unitsReserved} res
                   </td>
                   <td className="px-4 py-3.5 text-xs text-[#55655C]">{batch.storageUnit}</td>
                   <td className="px-4 py-3.5 text-right font-mono-tabular text-xs text-[#17231C]">
-                    {batch.hoursToExpiry <= 72 ? `${batch.hoursToExpiry}h` : `${Math.round(batch.hoursToExpiry / 24)}d`}
+                    {batch.expiryDate}
                   </td>
                   <td className="px-5 py-3.5">
-                    <RiskStatusIndicator level={batch.riskLevel} />
+                    <RiskStatusIndicator level={riskLevel} />
                   </td>
                 </tr>
-              ))}
+                );
+              })}
+              {!loading && batches.length === 0 ? (
+                <tr>
+                  <td colSpan={6} className="px-5 py-8 text-center text-sm text-[#55655C]">
+                    No inventory batches are registered for this demo organization.
+                  </td>
+                </tr>
+              ) : null}
             </tbody>
           </table>
+          {loading ? <p className="px-5 py-4 text-xs text-[#55655C]">Loading inventory...</p> : null}
         </div>
       </section>
       <ClinicalDisclaimerNotice variant="light" />
@@ -126,6 +221,10 @@ export function BankUpdateStockView({ demoUser }: { demoUser: DemoSessionUser })
   const [unitsDelta, setUnitsDelta] = useState<number>(12);
   const [storageUnit, setStorageUnit] = useState('Cold Vault A-02 (4°C)');
   const [expiryDate, setExpiryDate] = useState('2026-12-20');
+  const [city, setCity] = useState(demoUser.city);
+  const [state, setState] = useState('');
+  const [latitude, setLatitude] = useState('');
+  const [longitude, setLongitude] = useState('');
   const [counterparty, setCounterparty] = useState('');
   const [notes, setNotes] = useState('');
   const [movements, setMovements] = useState<DemoStockMovement[]>([]);
@@ -141,8 +240,10 @@ export function BankUpdateStockView({ demoUser }: { demoUser: DemoSessionUser })
       .then((rows) => {
         if (active) setMovements(rows);
       })
-      .catch(() => {
-        // Ignore silent fetch errors
+      .catch((error: unknown) => {
+        if (active) {
+          setErrorMsg(error instanceof Error ? error.message : 'Unable to load stock movements.');
+        }
       });
     return () => {
       active = false;
@@ -162,6 +263,10 @@ export function BankUpdateStockView({ demoUser }: { demoUser: DemoSessionUser })
       unitsDelta,
       storageUnit,
       expiryDate,
+      city: city || undefined,
+      state: state || undefined,
+      latitude: latitude ? Number(latitude) : undefined,
+      longitude: longitude ? Number(longitude) : undefined,
       counterparty: counterparty || undefined,
       notes: notes || undefined,
     });
@@ -255,12 +360,12 @@ export function BankUpdateStockView({ demoUser }: { demoUser: DemoSessionUser })
 
               <div>
                 <label htmlFor="stk-units" className="block text-xs font-medium text-[#17231C]">
-                  Units (1–500)
+                  Units {movementType === 'UPDATE_STOCK' ? '(0–500)' : '(1–500)'}
                 </label>
                 <input
                   id="stk-units"
                   type="number"
-                  min={1}
+                  min={movementType === 'UPDATE_STOCK' ? 0 : 1}
                   max={500}
                   value={unitsDelta}
                   onChange={(e) => setUnitsDelta(Number(e.target.value))}
@@ -325,6 +430,66 @@ export function BankUpdateStockView({ demoUser }: { demoUser: DemoSessionUser })
                   value={storageUnit}
                   onChange={(e) => setStorageUnit(e.target.value)}
                   className="mt-1.5 block w-full min-h-[40px] rounded-lg border border-[#DCE3DC] bg-[#F2F5F1] px-3 py-2 text-sm text-[#17231C] focus:border-[#123D2B] focus:bg-white focus:outline-none"
+                />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
+              <div>
+                <label htmlFor="stk-city" className="block text-xs font-medium text-[#17231C]">
+                  City
+                </label>
+                <input
+                  id="stk-city"
+                  type="text"
+                  value={city}
+                  onChange={(e) => setCity(e.target.value)}
+                  className="mt-1.5 block w-full min-h-[40px] rounded-lg border border-[#DCE3DC] bg-[#F2F5F1] px-3 py-2 text-sm text-[#17231C]"
+                />
+              </div>
+              <div>
+                <label htmlFor="stk-state" className="block text-xs font-medium text-[#17231C]">
+                  State / UT
+                </label>
+                <input
+                  id="stk-state"
+                  type="text"
+                  value={state}
+                  onChange={(e) => setState(e.target.value)}
+                  placeholder="State or Union Territory"
+                  className="mt-1.5 block w-full min-h-[40px] rounded-lg border border-[#DCE3DC] bg-[#F2F5F1] px-3 py-2 text-sm text-[#17231C]"
+                />
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label htmlFor="stk-latitude" className="block text-xs font-medium text-[#17231C]">
+                  Latitude (Optional)
+                </label>
+                <input
+                  id="stk-latitude"
+                  type="number"
+                  min="-90"
+                  max="90"
+                  step="any"
+                  value={latitude}
+                  onChange={(e) => setLatitude(e.target.value)}
+                  className="mt-1.5 block w-full min-h-[40px] rounded-lg border border-[#DCE3DC] bg-[#F2F5F1] px-3 py-2 text-sm text-[#17231C]"
+                />
+              </div>
+              <div>
+                <label htmlFor="stk-longitude" className="block text-xs font-medium text-[#17231C]">
+                  Longitude (Optional)
+                </label>
+                <input
+                  id="stk-longitude"
+                  type="number"
+                  min="-180"
+                  max="180"
+                  step="any"
+                  value={longitude}
+                  onChange={(e) => setLongitude(e.target.value)}
+                  className="mt-1.5 block w-full min-h-[40px] rounded-lg border border-[#DCE3DC] bg-[#F2F5F1] px-3 py-2 text-sm text-[#17231C]"
                 />
               </div>
             </div>
@@ -443,10 +608,31 @@ export function BankUpdateStockView({ demoUser }: { demoUser: DemoSessionUser })
 }
 
 export function BankGroupInventoryView({
+  demoUser,
   onNavigate,
 }: {
+  demoUser: DemoSessionUser;
   onNavigate: (page: AppPage) => void;
 }) {
+  const [summary, setSummary] = useState<NetworkSummaryResponse | null>(null);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetchNetworkSummary()
+      .then((result) => {
+        if (active) setSummary(result);
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setErrorMsg(error instanceof Error ? error.message : 'Unable to load group inventory.');
+        }
+      });
+    return () => {
+      active = false;
+    };
+  }, [demoUser]);
+
   return (
     <div className="space-y-6">
       <section className="flex flex-wrap items-center justify-between gap-3">
@@ -468,8 +654,10 @@ export function BankGroupInventoryView({
         </button>
       </section>
 
+      {errorMsg ? <p role="alert" className="text-sm text-[#C93440]">{errorMsg}</p> : null}
+      {!summary && !errorMsg ? <p className="text-sm text-[#55655C]">Loading group inventory...</p> : null}
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        {FALLBACK_DEMO_SUMMARY.bloodGroupOverview.map((group) => {
+        {(summary?.bloodGroupOverview ?? []).map((group) => {
           const pct = Math.min(
             100,
             Math.round((group.availableUnits / Math.max(1, group.minimumThreshold * 1.4)) * 100),
@@ -511,12 +699,37 @@ export function BankGroupInventoryView({
 }
 
 export function BankExpiryManagementView({
+  demoUser,
   onNavigate,
 }: {
+  demoUser: DemoSessionUser;
   onNavigate: (page: AppPage) => void;
 }) {
-  const sortedBatches = [...DEMO_BLOOD_BANK_BATCHES].sort(
-    (a, b) => a.hoursToExpiry - b.hoursToExpiry,
+  const [alerts, setAlerts] = useState<InventoryExpiryAlert[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
+
+  useEffect(() => {
+    let active = true;
+    fetchInventoryExpiryAlerts(demoUser)
+      .then((rows) => {
+        if (active) setAlerts(rows);
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setErrorMsg(error instanceof Error ? error.message : 'Unable to load expiry alerts.');
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [demoUser]);
+
+  const sortedBatches = [...alerts].sort(
+    (left, right) => left.hoursUntilExpiry - right.hoursUntilExpiry,
   );
 
   return (
@@ -530,7 +743,7 @@ export function BankExpiryManagementView({
                 FEFO Expiry Management Watchlist
               </h2>
               <p className="text-xs text-[#55655C]">
-                DEMO DATA · First-Expired-First-Out prioritization for units &le; 72h from expiry
+                DEMO DATA · Current organization batches expiring within 72 hours or already expired
               </p>
             </div>
           </div>
@@ -544,9 +757,18 @@ export function BankExpiryManagementView({
         </div>
       </section>
 
+      {errorMsg ? <p role="alert" className="text-sm text-[#C93440]">{errorMsg}</p> : null}
+      {loading ? <p className="text-sm text-[#55655C]">Loading expiry alerts...</p> : null}
+      {!loading && !errorMsg && sortedBatches.length === 0 ? (
+        <p className="rounded-xl border border-[#DCE3DC] bg-white p-5 text-sm text-[#55655C]">
+          No expiring or expired batches are recorded for this demo organization.
+        </p>
+      ) : null}
+
       <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
         {sortedBatches.map((batch) => {
-          const isUrgent = batch.hoursToExpiry <= 72;
+          const isExpired = batch.status === 'EXPIRED';
+          const isUrgent = batch.hoursUntilExpiry <= 72;
           return (
             <div
               key={batch.batchCode}
@@ -560,26 +782,28 @@ export function BankExpiryManagementView({
                     {batch.batchCode}
                   </span>
                   <h3 className="mt-1 font-display text-base font-semibold text-[#17231C]">
-                    {batch.bloodGroup} · {BLOOD_COMPONENT_LABELS[batch.component]}
+                    {batch.bloodGroup} ·                     {BLOOD_COMPONENT_LABELS[batch.component]}
                   </h3>
-                  <p className="mt-1 text-xs text-[#55655C]">{batch.storageUnit}</p>
+                  <p className="mt-1 text-xs text-[#55655C]">{batch.bloodBankName} · {batch.city}, {batch.state}</p>
                 </div>
                 <span
                   className={`rounded-md px-2.5 py-1 font-mono-tabular text-xs font-semibold ${
-                    batch.hoursToExpiry <= 48
+                    isExpired || batch.hoursUntilExpiry <= 48
                       ? 'bg-[#C93440]/10 text-[#C93440]'
                       : isUrgent
                         ? 'bg-[#B45309]/10 text-[#B45309]'
                         : 'bg-[#F2F5F1] text-[#55655C]'
                   }`}
                 >
-                  {isUrgent ? `${batch.hoursToExpiry}h left` : `${Math.round(batch.hoursToExpiry / 24)}d left`}
+                  {isExpired
+                    ? `Expired ${Math.abs(batch.hoursUntilExpiry)}h ago`
+                    : `${batch.hoursUntilExpiry}h left`}
                 </span>
               </div>
 
               <div className="mt-4 flex items-center justify-between border-t border-[#DCE3DC] pt-3 text-xs">
                 <span className="font-mono-tabular text-[#17231C]">
-                  <strong>{batch.unitsAvailable}u</strong> available · {batch.unitsReserved}u reserved
+                  <strong>{batch.unitsAvailable}u</strong> available
                 </span>
                 <span className="text-[#55655C]">Expiry: {batch.expiryDate}</span>
               </div>
@@ -594,6 +818,7 @@ export function BankExpiryManagementView({
 export function BankRecordsView({ demoUser }: { demoUser: DemoSessionUser }) {
   const [movements, setMovements] = useState<DemoStockMovement[]>([]);
   const [filterType, setFilterType] = useState<string>('');
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     let active = true;
@@ -601,8 +826,10 @@ export function BankRecordsView({ demoUser }: { demoUser: DemoSessionUser }) {
       .then((rows) => {
         if (active) setMovements(rows);
       })
-      .catch(() => {
-        // Ignore silent fetch error
+      .catch((error: unknown) => {
+        if (active) {
+          setErrorMsg(error instanceof Error ? error.message : 'Unable to load movement history.');
+        }
       });
     return () => {
       active = false;
@@ -613,6 +840,7 @@ export function BankRecordsView({ demoUser }: { demoUser: DemoSessionUser }) {
 
   return (
     <div className="space-y-6">
+      {errorMsg ? <p role="alert" className="text-sm text-[#C93440]">{errorMsg}</p> : null}
       <section className="clinical-card overflow-hidden rounded-xl">
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-[#DCE3DC] px-5 py-4">
           <div className="flex items-center gap-2.5">

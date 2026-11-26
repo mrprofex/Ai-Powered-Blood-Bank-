@@ -1,4 +1,4 @@
-import type { Request, Response } from 'express';
+import type { NextFunction, Request, Response } from 'express';
 import type {
   AvailabilityQueryInput,
   DemoRequestValidationInput,
@@ -7,11 +7,46 @@ import {
   DEMO_BLOOD_INVENTORY,
   DEMO_NETWORK_SUMMARY,
 } from '../data/demoNetworkData.ts';
+import { getAvailabilityRecords } from '../services/inventoryService.ts';
+import { getShortagePredictionResponse } from '../services/predictionService.ts';
+
+function getUpdatedNetworkSummary() {
+  const inventory = getAvailabilityRecords();
+  const bloodGroupOverview = DEMO_NETWORK_SUMMARY.bloodGroupOverview.map((group) => {
+    const seedUnits = DEMO_BLOOD_INVENTORY
+      .filter((record) => record.bloodGroup === group.bloodGroup)
+      .reduce((sum, record) => sum + record.unitsAvailable, 0);
+    const currentUnits = inventory
+      .filter((record) => record.bloodGroup === group.bloodGroup)
+      .reduce((sum, record) => sum + record.unitsAvailable, 0);
+    const unitsAvailable = Math.max(0, group.availableUnits + currentUnits - seedUnits);
+    const baselineDailyUse = group.availableUnits / Math.max(group.daysOfCover, 0.1);
+    const daysOfCover = unitsAvailable / baselineDailyUse;
+    return {
+      ...group,
+      availableUnits: unitsAvailable,
+      daysOfCover: Math.round(daysOfCover * 10) / 10,
+      riskLevel: daysOfCover <= 2.5 ? 'CRITICAL' as const : daysOfCover <= 5 ? 'MODERATE' as const : 'LOW' as const,
+    };
+  });
+  const availableBloodUnits = bloodGroupOverview.reduce(
+    (sum, group) => sum + group.availableUnits,
+    0,
+  );
+  return {
+    ...DEMO_NETWORK_SUMMARY,
+    kpis: {
+      ...DEMO_NETWORK_SUMMARY.kpis,
+      availableBloodUnits,
+    },
+    bloodGroupOverview,
+  };
+}
 
 export function getNetworkSummary(_req: Request, res: Response): void {
   res.status(200).json({
     status: 'success',
-    data: DEMO_NETWORK_SUMMARY,
+    data: getUpdatedNetworkSummary(),
   });
 }
 
@@ -22,7 +57,7 @@ export function getBloodAvailability(req: Request, res: Response): void {
 
   const searchLower = query.search?.toLowerCase();
 
-  const filtered = DEMO_BLOOD_INVENTORY.filter((record) => {
+  const filtered = getAvailabilityRecords().filter((record) => {
     if (query.bloodGroup && record.bloodGroup !== query.bloodGroup) {
       return false;
     }
@@ -54,6 +89,27 @@ export function getBloodAvailability(req: Request, res: Response): void {
     },
     data: filtered,
   });
+}
+
+export function getNetworkPredictions(
+  _req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
+  getShortagePredictionResponse()
+    .then((prediction) => {
+      res.status(200).json({
+        status: 'success',
+        meta: {
+          isDemoData: true,
+          predictionMode: prediction.predictionMode,
+          disclaimer: prediction.disclaimer,
+          computedAt: prediction.computedAt,
+        },
+        data: prediction,
+      });
+    })
+    .catch(next);
 }
 
 export function validateDemoRequest(req: Request, res: Response): void {

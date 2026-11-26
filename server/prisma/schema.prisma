@@ -31,6 +31,21 @@ enum VerificationStatus {
   SUSPENDED
 }
 
+enum ExternalSystemProvider {
+  HOSPITAL_SYSTEM
+  BLOOD_BANK_SYSTEM
+  ERAKTKOSH
+}
+
+enum IntegrationConnectionStatus {
+  NOT_CONFIGURED
+  PENDING
+  CONNECTED
+  STALE
+  ERROR
+  DEMO_ONLY
+}
+
 enum BloodGroup {
   O_POS
   O_NEG
@@ -116,11 +131,33 @@ model Organization {
   verifications    OrganizationVerification[]
   hospital         Hospital?
   bloodBank        BloodBank?
+  integrations     OrganizationIntegration[]
   auditLogs        AuditLog[]
 
   @@index([type, isVerified])
   @@index([locationId])
   @@map("organizations")
+}
+
+model OrganizationIntegration {
+  id                    String                       @id @default(cuid())
+  organizationId        String                       @map("organization_id")
+  provider              ExternalSystemProvider
+  status                IntegrationConnectionStatus @default(NOT_CONFIGURED)
+  externalSystemName    String?                      @map("external_system_name")
+  secretReference       String?                      @map("secret_reference")
+  lastSyncAt            DateTime?                    @map("last_sync_at")
+  lastSyncStatus        String?                      @map("last_sync_status")
+  staleAfterMinutes     Int                          @default(180) @map("stale_after_minutes")
+  lastErrorSummary      String?                      @map("last_error_summary")
+  createdAt             DateTime                     @default(now()) @map("created_at")
+  updatedAt             DateTime                     @updatedAt @map("updated_at")
+
+  organization          Organization                 @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, provider])
+  @@index([status, lastSyncAt])
+  @@map("organization_integrations")
 }
 
 model OrganizationVerification {

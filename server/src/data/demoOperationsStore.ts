@@ -179,6 +179,10 @@ export interface DemoManagedEntity {
   licenseRef: string;
   status: 'ACTIVE' | 'SUSPENDED' | 'UNDER_REVIEW';
   unitsOrBedsLabel: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  latitude?: number;
+  longitude?: number;
   isDemoData: true;
 }
 

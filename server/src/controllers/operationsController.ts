@@ -4,9 +4,18 @@ import type {
   AdminVerificationActionInput,
   BloodStockUpdateInput,
   DemoRequestValidationInput,
+  InventoryBatchImportInput,
+  NearbyMatchQueryInput,
+  OrganizationOnboardingInput,
   RequestStatusUpdateInput,
 } from '../../../shared/schemas/networkSchemas.ts';
-import type { DemoHospitalRequestRecord, DemoStockMovement } from '../../../shared/types/network.ts';
+import type {
+  DemoHospitalRequestRecord,
+  DemoStockMovement,
+  IntegrationReadiness,
+  NearbyBloodBankMatch,
+  OrganizationConnectionSummary,
+} from '../../../shared/types/network.ts';
 import {
   appendDemoAuditLog,
   demoAuditLogsStore,
@@ -17,6 +26,15 @@ import {
   demoVerificationsStore,
 } from '../data/demoOperationsStore.ts';
 import type { DemoActorContext } from '../middleware/rbac.ts';
+import {
+  findMatchesForCityRequest,
+  getExpiryAlerts,
+  importInventoryBatches,
+  findNearbyBloodBankMatches,
+  listInventoryBatches,
+  recordInventoryMovement,
+} from '../services/inventoryService.ts';
+import { getIntegrationReadiness } from '../services/externalIntegrationService.ts';
 
 function getActor(req: Request): DemoActorContext {
   return (
@@ -39,6 +57,15 @@ export function listHospitalRequests(_req: Request, res: Response): void {
 export function createHospitalRequest(req: Request, res: Response): void {
   const actor = getActor(req);
   const payload = req.body as DemoRequestValidationInput;
+  const matchingCandidates = findMatchesForCityRequest({
+    bloodGroup: payload.bloodGroup,
+    component: payload.component,
+    units: payload.unitsNeeded,
+    city: payload.city,
+    latitude: payload.latitude,
+    longitude: payload.longitude,
+  });
+  const firstSuitableMatch = matchingCandidates.find((match) => match.canFulfillRequest);
 
   const newRequest: DemoHospitalRequestRecord = {
     id: `REQ-DEMO-${Date.now().toString().slice(-4)}`,
@@ -49,12 +76,13 @@ export function createHospitalRequest(req: Request, res: Response): void {
     component: payload.component,
     units: payload.unitsNeeded,
     urgency: payload.urgency,
-    status: 'OPEN',
-    matchedBank: 'Pending Blood Bank Matching',
-    etaMinutes: payload.urgency === 'CRITICAL' ? 25 : payload.urgency === 'HIGH' ? 40 : 65,
+    status: firstSuitableMatch ? 'MATCHED' : 'OPEN',
+    matchedBank: firstSuitableMatch?.bloodBankName ?? 'No suitable nearby bank found',
+    etaMinutes: firstSuitableMatch?.estimatedTravelMinutes ?? 0,
     createdAt: new Date().toISOString(),
     createdBy: actor.userName,
     notes: payload.notes,
+    matchingCandidates,
     isDemoData: true,
   };
 
@@ -67,7 +95,7 @@ export function createHospitalRequest(req: Request, res: Response): void {
     action: 'CREATE_BLOOD_REQUEST',
     target: newRequest.id,
     outcome: 'ALLOWED',
-    details: `Created ${payload.urgency} demo request for ${payload.unitsNeeded}u ${payload.bloodGroup} ${payload.component} in ${payload.city}.`,
+    details: `Created ${payload.urgency} demo request for ${payload.unitsNeeded}u ${payload.bloodGroup} ${payload.component} in ${payload.city}; ${matchingCandidates.length} nearby blood-bank candidates evaluated.`,
   });
 
   res.status(201).json({
@@ -124,53 +152,153 @@ export function listStockMovements(_req: Request, res: Response): void {
 export function recordBloodStockUpdate(req: Request, res: Response): void {
   const actor = getActor(req);
   const payload = req.body as BloodStockUpdateInput;
-
-  const latestSameBatch = demoStockMovementsStore.find(
-    (m) => m.batchCode === payload.batchCode,
-  );
-  const prevUnits = latestSameBatch ? latestSameBatch.resultingUnits : 40;
-  const deltaSigned = payload.movementType === 'DISPATCH_OUT' ? -payload.unitsDelta : payload.unitsDelta;
-  const resultingUnits =
-    payload.movementType === 'UPDATE_STOCK'
-      ? payload.unitsDelta
-      : Math.max(0, prevUnits + deltaSigned);
-
-  const movement: DemoStockMovement = {
-    id: `MOV-DEMO-${Date.now().toString().slice(-4)}`,
-    batchCode: payload.batchCode,
-    bloodGroup: payload.bloodGroup,
-    component: payload.component,
-    movementType: payload.movementType,
-    unitsDelta: payload.unitsDelta,
-    resultingUnits,
-    storageUnit: payload.storageUnit,
-    expiryDate: payload.expiryDate,
-    counterparty: payload.counterparty,
-    notes: payload.notes,
-    actorName: actor.userName,
-    actorRole: actor.role,
-    institutionName: actor.institutionName,
-    timestamp: new Date().toISOString(),
-    isDemoData: true,
-  };
-
-  demoStockMovementsStore.unshift(movement);
-
-  appendDemoAuditLog({
-    actorName: actor.userName,
-    actorRole: actor.role,
-    institutionName: actor.institutionName,
-    action: `INVENTORY_${payload.movementType}`,
-    target: payload.batchCode,
-    outcome: 'ALLOWED',
-    details: `${payload.movementType} (${payload.unitsDelta}u ${payload.bloodGroup} ${payload.component}) -> resulting ${resultingUnits}u. Notes: ${payload.notes ?? 'None'}`,
-  });
+  const movement = recordInventoryMovement(actor, payload);
 
   res.status(201).json({
     status: 'success',
     meta: { isDemoData: true, persistedInPostgreSQL: false },
     message: 'Inventory movement recorded with immutable audit entry (demo session).',
     data: movement,
+  });
+}
+
+export function getInventoryBatches(req: Request, res: Response): void {
+  const actor = getActor(req);
+  res.status(200).json({
+    status: 'success',
+    meta: {
+      isDemoData: true,
+      persistence: 'PROCESS_MEMORY_ONLY',
+      disclaimer: 'Demo inventory is kept in server memory and is not a live facility feed.',
+    },
+    data: listInventoryBatches(actor.institutionName),
+  });
+}
+
+export function getInventoryExpiryAlerts(req: Request, res: Response): void {
+  const actor = getActor(req);
+  res.status(200).json({
+    status: 'success',
+    meta: {
+      isDemoData: true,
+      persistence: 'PROCESS_MEMORY_ONLY',
+      disclaimer:
+        'Expiry alerts are calculated from demo inventory; verify stock directly with the facility.',
+    },
+    data: getExpiryAlerts(actor.institutionName),
+  });
+}
+
+export function importInventory(req: Request, res: Response): void {
+  const actor = getActor(req);
+  const payload = req.body as InventoryBatchImportInput;
+  const imported = importInventoryBatches(actor, payload.rows);
+  res.status(201).json({
+    status: 'success',
+    meta: {
+      isDemoData: true,
+      persistedInPostgreSQL: false,
+      persistence: 'PROCESS_MEMORY_ONLY',
+    },
+    message: `Imported ${imported.length} inventory batches into the demo session.`,
+    data: imported,
+  });
+}
+
+export function getNearbyInventoryMatches(req: Request, res: Response): void {
+  const query = (
+    req as Request & { validatedQuery?: NearbyMatchQueryInput }
+  ).validatedQuery;
+  if (!query) {
+    res.status(400).json({ status: 'error', message: 'A valid location and request are required.' });
+    return;
+  }
+  res.status(200).json({
+    status: 'success',
+    meta: {
+      isDemoData: true,
+      disclaimer:
+        'Matches use approximate demo coordinates and inventory. Confirm availability, transport and clinical suitability directly with the blood bank.',
+    },
+    data: findNearbyBloodBankMatches(query),
+  });
+}
+
+export function createOrganizationOnboarding(req: Request, res: Response): void {
+  const payload = req.body as OrganizationOnboardingInput;
+  const duplicate = demoInstitutionsStore.some(
+    (organization) =>
+      organization.licenseRef.toLowerCase() === payload.licenseNumber.toLowerCase() ||
+      organization.contactEmail?.toLowerCase() === payload.contactEmail.toLowerCase(),
+  );
+  if (duplicate) {
+    res.status(409).json({
+      status: 'error',
+      message: 'An organization with this license number or contact email is already registered.',
+    });
+    return;
+  }
+
+  const id = `ORG-DEMO-${Date.now().toString(36).toUpperCase()}`;
+  const verificationId = `VER-DEMO-${Date.now().toString(36).toUpperCase()}`;
+  const createdAt = new Date().toISOString();
+  const organization = {
+    id,
+    name: payload.organizationName,
+    type: payload.organizationType,
+    city: payload.city,
+    state: payload.state,
+    licenseRef: payload.licenseNumber,
+    status: 'UNDER_REVIEW' as const,
+    unitsOrBedsLabel:
+      payload.organizationType === 'HOSPITAL'
+        ? `${payload.bedCapacity} Beds · Pending Verification`
+        : `${payload.storageCapacityUnits} Units · Pending Verification`,
+    contactEmail: payload.contactEmail,
+    contactPhone: payload.contactPhone,
+    ...(payload.latitude !== undefined && payload.longitude !== undefined
+      ? { latitude: payload.latitude, longitude: payload.longitude }
+      : {}),
+    isDemoData: true as const,
+  };
+  demoInstitutionsStore.unshift(organization);
+  demoVerificationsStore.unshift({
+    id: verificationId,
+    organizationName: organization.name,
+    type: organization.type,
+    city: organization.city,
+    state: organization.state,
+    licenseNumber: organization.licenseRef,
+    submittedAt: createdAt,
+    status: 'PENDING',
+    isDemoData: true,
+  });
+
+  appendDemoAuditLog({
+    actorName: payload.fullName,
+    actorRole: 'PUBLIC',
+    institutionName: payload.organizationName,
+    action: 'ORGANIZATION_ONBOARDING_SUBMITTED',
+    target: verificationId,
+    outcome: 'ALLOWED',
+    details: `Submitted ${payload.organizationType} onboarding for admin review (demo memory store).`,
+  });
+
+  res.status(201).json({
+    status: 'success',
+    meta: {
+      isDemoData: true,
+      persistedInPostgreSQL: false,
+      verificationStatus: 'PENDING',
+    },
+    message:
+      'Registration received in the demo session and queued for admin verification. No live organization account has been created.',
+    data: {
+      organizationId: id,
+      verificationId,
+      status: 'PENDING',
+      organization,
+    },
   });
 }
 
@@ -194,6 +322,37 @@ export function listAdminDirectory(_req: Request, res: Response): void {
   });
 }
 
+export function listAdminConnections(_req: Request, res: Response): void {
+  const connections: OrganizationConnectionSummary[] = demoInstitutionsStore.map(
+    (organization) => ({
+      organizationId: organization.id,
+      organizationName: organization.name,
+      type: organization.type,
+      city: organization.city,
+      state: organization.state,
+      status: organization.status === 'ACTIVE' ? 'DEMO_ONLY' : 'PENDING',
+      lastSyncAt: null,
+      isStale: false,
+      sourceLabel:
+        organization.status === 'ACTIVE'
+          ? 'Demo organization record; no external system connection'
+          : 'Awaiting admin verification; no connection configured',
+      isDemoData: true,
+    }),
+  );
+  const integrations: IntegrationReadiness[] = getIntegrationReadiness();
+  res.status(200).json({
+    status: 'success',
+    meta: {
+      isDemoData: true,
+      persistence: 'PROCESS_MEMORY_ONLY',
+      disclaimer:
+        'Demo organizations are not live integrations. A missing sync timestamp means no sync has occurred; it is not reported as stale.',
+    },
+    data: { connections, integrations },
+  });
+}
+
 export function reviewAdminVerification(req: Request, res: Response): void {
   const actor = getActor(req);
   const id = req.params.id;
@@ -207,6 +366,17 @@ export function reviewAdminVerification(req: Request, res: Response): void {
 
   target.status = payload.status;
   target.reviewNote = payload.reviewNote;
+  const organization = demoInstitutionsStore.find(
+    (item) => item.licenseRef.toLowerCase() === target.licenseNumber.toLowerCase(),
+  );
+  if (organization) {
+    organization.status =
+      payload.status === 'VERIFIED'
+        ? 'ACTIVE'
+        : payload.status === 'REJECTED'
+          ? 'SUSPENDED'
+          : 'UNDER_REVIEW';
+  }
 
   appendDemoAuditLog({
     actorName: actor.userName,

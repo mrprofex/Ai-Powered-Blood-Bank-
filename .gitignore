@@ -10,3 +10,7 @@ coverage/
 .vercel/
 prisma/generated/
 tmp/
+.neon
+
+.vercel
+.env*

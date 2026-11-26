@@ -303,16 +303,16 @@ export function ClientApp() {
             <BloodBankDashboard demoUser={demoUser} onNavigate={navigate} />
           )}
           {effectivePage === 'bank-inventory-overview' && (
-            <BankInventoryOverviewView onNavigate={navigate} />
+            <BankInventoryOverviewView demoUser={demoUser} onNavigate={navigate} />
           )}
           {effectivePage === 'bank-update-stock' && (
             <BankUpdateStockView demoUser={demoUser} />
           )}
           {effectivePage === 'bank-group-inventory' && (
-            <BankGroupInventoryView onNavigate={navigate} />
+            <BankGroupInventoryView demoUser={demoUser} onNavigate={navigate} />
           )}
           {effectivePage === 'bank-expiry-management' && (
-            <BankExpiryManagementView onNavigate={navigate} />
+            <BankExpiryManagementView demoUser={demoUser} onNavigate={navigate} />
           )}
           {effectivePage === 'bank-records' && <BankRecordsView demoUser={demoUser} />}
 
@@ -346,13 +346,13 @@ export function ClientApp() {
             <EmergencyRequestsView demoUser={demoUser} onNavigate={navigate} />
           )}
           {effectivePage === 'predictions' && (
-            <PredictionsWorkspace role={demoUser.role} initialPeriod="7d" />
+            <PredictionsWorkspace demoUser={demoUser} initialPeriod="7d" />
           )}
           {effectivePage === 'predictions-7d' && (
-            <PredictionsWorkspace role={demoUser.role} initialPeriod="7d" />
+            <PredictionsWorkspace demoUser={demoUser} initialPeriod="7d" />
           )}
           {effectivePage === 'predictions-30d' && (
-            <PredictionsWorkspace role={demoUser.role} initialPeriod="30d" />
+            <PredictionsWorkspace demoUser={demoUser} initialPeriod="30d" />
           )}
           {effectivePage === 'shortage-alerts' && (
             <NotificationsCenterPage role={demoUser.role} shortageAlertsOnly />

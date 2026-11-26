@@ -13,60 +13,84 @@ import {
   BLOOD_COMPONENT_LABELS,
   BLOOD_GROUPS,
   type BloodGroup,
-  type UserRole,
 } from '../../../shared/constants/bloodNetwork.ts';
 import {
   DEMO_CONSUMPTION_TREND,
   DEMO_CONSUMPTION_TREND_30D,
-  DEMO_ROLE_PREDICTIONS,
 } from '../data/demoPortalData.ts';
 import {
   ClinicalDisclaimerNotice,
   EmptyStatePanel,
   RiskStatusIndicator,
 } from '../components/ui/UiPrimitives.tsx';
+import type { DemoSessionUser, ShortageForecastItem } from '../../../shared/types/network.ts';
+import { fetchShortagePredictions } from '../services/networkApi.ts';
 
 interface PredictionsWorkspaceProps {
-  role: UserRole;
+  demoUser: DemoSessionUser;
   initialPeriod?: '7d' | '30d';
 }
 
 export function PredictionsWorkspace({
-  role,
+  demoUser,
   initialPeriod = '7d',
 }: PredictionsWorkspaceProps) {
   const [period, setPeriod] = useState<'7d' | '30d'>(initialPeriod);
   const [bloodGroupFilter, setBloodGroupFilter] = useState<BloodGroup | ''>('');
   const [regionFilter, setRegionFilter] = useState<string>('');
+  const [predictions, setPredictions] = useState<ShortageForecastItem[]>([]);
+  const [predictionSummary, setPredictionSummary] = useState('');
+  const [predictionDisclaimer, setPredictionDisclaimer] = useState('');
+  const [computedAt, setComputedAt] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [errorMsg, setErrorMsg] = useState<string | null>(null);
 
   useEffect(() => {
     setPeriod(initialPeriod);
   }, [initialPeriod]);
 
   const targetScope: 'HOSPITAL' | 'BLOOD_BANK' | 'NETWORK' =
-    role === 'HOSPITAL_COORDINATOR'
+    demoUser.role === 'HOSPITAL_COORDINATOR'
       ? 'HOSPITAL'
-      : role === 'BLOOD_BANK_OFFICER'
+      : demoUser.role === 'BLOOD_BANK_OFFICER'
         ? 'BLOOD_BANK'
         : 'NETWORK';
 
+  useEffect(() => {
+    let active = true;
+    setLoading(true);
+    fetchShortagePredictions(demoUser)
+      .then((response) => {
+        if (!active) return;
+        setPredictions(response.data);
+        setPredictionSummary(response.aiSummary);
+        setPredictionDisclaimer(response.disclaimer);
+        setComputedAt(response.computedAt);
+      })
+      .catch((error: unknown) => {
+        if (active) {
+          setErrorMsg(error instanceof Error ? error.message : 'Unable to load shortage predictions.');
+        }
+      })
+      .finally(() => {
+        if (active) setLoading(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [demoUser]);
+
   const scopedPredictions = useMemo(() => {
-    return DEMO_ROLE_PREDICTIONS.filter((item) => {
-      if (item.scope !== targetScope) return false;
-      if (item.period !== period) return false;
+    return predictions.filter((item) => {
       if (bloodGroupFilter && item.bloodGroup !== bloodGroupFilter) return false;
       if (regionFilter && item.region !== regionFilter) return false;
       return true;
     });
-  }, [targetScope, period, bloodGroupFilter, regionFilter]);
+  }, [predictions, bloodGroupFilter, regionFilter]);
 
   const availableRegions = useMemo(() => {
-    return Array.from(
-      new Set(
-        DEMO_ROLE_PREDICTIONS.filter((i) => i.scope === targetScope).map((i) => i.region),
-      ),
-    );
-  }, [targetScope]);
+    return Array.from(new Set(predictions.map((item) => item.region)));
+  }, [predictions]);
 
   const titleByRole =
     targetScope === 'HOSPITAL'
@@ -77,10 +101,10 @@ export function PredictionsWorkspace({
 
   const subtitleByRole =
     targetScope === 'HOSPITAL'
-      ? 'Hospital-specific transfusion demand outlook, expected requirements, and trauma cover risk (DEMO DATA)'
+      ? 'Network-level inventory signals for hospital planning; not facility-specific (DEMO DATA)'
       : targetScope === 'BLOOD_BANK'
-        ? 'Cold-vault stock depletion, replenishment needs, and near-expiry rotation insights (DEMO DATA)'
-        : 'Regional corridor shortages, national blood-group demand, and institutional risk summaries (DEMO DATA)';
+        ? 'Network-level stock depletion and expiry estimates; not a live facility feed (DEMO DATA)'
+        : 'Network-wide inventory shortage and expiry estimates (DEMO DATA)';
 
   const chartData = period === '7d' ? DEMO_CONSUMPTION_TREND : DEMO_CONSUMPTION_TREND_30D;
 
@@ -170,10 +194,18 @@ export function PredictionsWorkspace({
           <div className="flex items-end">
             <div className="w-full rounded-lg border border-[#DCE3DC] bg-[#F2F5F1] px-3 py-2 text-xs text-[#55655C]">
               <p className="font-semibold text-[#17231C]">DEMO FORECAST NOTICE</p>
-              <p className="mt-0.5">Not medically validated · Gemini Phase 5</p>
+              <p className="mt-0.5">Rule-based demo estimate · not clinically validated</p>
             </div>
           </div>
         </div>
+      </section>
+
+      <section className="clinical-card rounded-xl border border-[#DCE3DC] p-4">
+        <p className="text-xs font-semibold text-[#17231C]">Forecast method</p>
+        <p className="mt-1 text-sm text-[#55655C]">{predictionSummary || 'Loading forecast method...'}</p>
+        {predictionDisclaimer ? (
+          <p className="mt-2 text-xs text-[#55655C]">{predictionDisclaimer}</p>
+        ) : null}
       </section>
 
       {/* Forecast Trend Chart */}
@@ -181,15 +213,15 @@ export function PredictionsWorkspace({
         <div className="mb-4 flex flex-wrap items-center justify-between gap-2">
           <div>
             <h3 className="font-display text-sm font-semibold text-[#17231C]">
-              {period === '7d' ? '7-Day' : '30-Day'} Projected Stock vs. Utilization ({targetScope})
+              {period === '7d' ? '7-Day' : '30-Day'} Synthetic Stock vs. Utilization Preview
             </h3>
             <p className="text-xs text-[#55655C]">
-              DEMO DATA · Simulated demand trajectory for planning preview only
+              DEMO DATA · Static illustrative chart, separate from the API forecasts below
             </p>
           </div>
           <span className="inline-flex items-center gap-1 font-mono-tabular text-xs text-[#55655C]">
             <Clock className="h-3.5 w-3.5" aria-hidden="true" />
-            Last Updated: 2026-11-25 14:20 IST
+            {computedAt ? `Computed ${new Date(computedAt).toLocaleString('en-IN')}` : 'Not computed'}
           </span>
         </div>
 
@@ -252,7 +284,15 @@ export function PredictionsWorkspace({
       </section>
 
       {/* Role-Specific Forecast Cards with Explanations */}
-      {scopedPredictions.length === 0 ? (
+      {errorMsg ? (
+        <p role="alert" className="rounded-lg border border-[#C93440]/30 bg-[#FEF2F2] p-4 text-sm text-[#C93440]">
+          {errorMsg}
+        </p>
+      ) : loading ? (
+        <p className="rounded-lg border border-[#DCE3DC] bg-white p-4 text-sm text-[#55655C]">
+          Calculating deterministic demo forecasts...
+        </p>
+      ) : scopedPredictions.length === 0 ? (
         <EmptyStatePanel
           title="No forecasts match the current filters"
           description="Clear the blood group or corridor filter to view simulated forecasts for this period."
@@ -266,7 +306,7 @@ export function PredictionsWorkspace({
         <section className="grid grid-cols-1 gap-4 md:grid-cols-2">
           {scopedPredictions.map((pred) => (
             <div
-              key={pred.id}
+              key={`${pred.bloodGroup}-${pred.component}`}
               className="clinical-card clinical-card-interactive rounded-xl p-5 space-y-3.5"
             >
               <div className="flex items-start justify-between gap-3">
@@ -294,7 +334,7 @@ export function PredictionsWorkspace({
                 <div>
                   <p className="text-[10px] text-[#55655C]">Proj. Need ({period})</p>
                   <p className="mt-0.5 font-mono-tabular text-sm font-semibold text-[#1D593E]">
-                    {pred.projectedDemandOrDepletion}u
+                    {period === '7d' ? pred.projected7DayDemand : pred.projected30DayDemand}u
                   </p>
                 </div>
                 <div>
@@ -304,7 +344,7 @@ export function PredictionsWorkspace({
                       pred.riskLevel === 'CRITICAL' ? 'text-[#C93440]' : 'text-[#17231C]'
                     }`}
                   >
-                    -{pred.projectedDeficitUnits}u
+                    -{period === '7d' ? pred.projected7DayDeficit : pred.projected30DayDeficit}u
                   </p>
                 </div>
               </div>
@@ -315,8 +355,8 @@ export function PredictionsWorkspace({
               </div>
 
               <div className="flex items-center justify-between border-t border-[#DCE3DC] pt-2.5 text-[11px] text-[#55655C]">
-                <span>DEMO DATA · Non-clinical</span>
-                <span className="font-mono-tabular">{pred.updatedAt}</span>
+                <span>DEMO DATA · Heuristic, not clinical advice</span>
+                <span className="font-mono-tabular">Risk score {pred.riskScore}/100</span>
               </div>
             </div>
           ))}
