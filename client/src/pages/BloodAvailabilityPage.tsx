@@ -10,6 +10,10 @@ import {
   RotateCcw,
   Search,
   Table2,
+  Shield,
+  PlusCircle,
+  AlertCircle,
+  ExternalLink,
 } from 'lucide-react';
 import {
   BLOOD_COMPONENTS,
@@ -39,6 +43,8 @@ import {
   RiskStatusIndicator,
   TableSkeleton,
 } from '../components/ui/UiPrimitives.tsx';
+import { useAuth } from '@/client/src/context/AuthContext.tsx';
+import { ProtectedRoute } from '@/client/src/components/auth/ProtectedRoute.tsx';
 
 function getStockPercent(item: BloodGroupSummaryItem): number {
   if (item.minimumThreshold <= 0) return 100;
@@ -66,6 +72,12 @@ export function BloodAvailabilityPage({ initialSearch = '' }: { initialSearch?: 
   const [searchTerm, setSearchTerm] = useState<string>(initialSearch);
   const [viewMode, setViewMode] = useState<'grid' | 'table'>('grid');
   const [detailRecord, setDetailRecord] = useState<BloodInventoryRecord | null>(null);
+  const [requestRecord, setRequestRecord] = useState<BloodInventoryRecord | null>(null);
+  const [requestSubmitting, setRequestSubmitting] = useState(false);
+  const [requestError, setRequestError] = useState<string | null>(null);
+  const [requestSuccess, setRequestSuccess] = useState(false);
+
+  const { user, login, isAuthenticated } = useAuth();
 
   useEffect(() => {
     setSearchTerm(initialSearch);
@@ -129,6 +141,52 @@ export function BloodAvailabilityPage({ initialSearch = '' }: { initialSearch?: 
     setSelectedState('');
     setSelectedRisk('');
     setSearchTerm('');
+  };
+
+  const handleRequestClick = (record: BloodInventoryRecord) => {
+    if (!isAuthenticated) {
+      setRequestRecord(record);
+      return;
+    }
+    setRequestRecord(record);
+  };
+
+  const handleSubmitRequest = async () => {
+    if (!requestRecord) return;
+    
+    setRequestSubmitting(true);
+    setRequestError(null);
+    setRequestSuccess(false);
+    
+    try {
+      // In demo mode, simulate request creation
+      await new Promise((resolve) => setTimeout(resolve, 1000));
+      
+      const requestId = `REQ-DEMO-${Date.now().toString().slice(-6)}`;
+      console.log('Blood request created:', {
+        id: requestId,
+        facility: requestRecord.facilityName,
+        bloodGroup: requestRecord.bloodGroup,
+        component: requestRecord.component,
+        units: requestRecord.unitsAvailable,
+        requestedBy: user?.userName || 'Demo User',
+      });
+      
+      setRequestSuccess(true);
+      setTimeout(() => {
+        setRequestRecord(null);
+        setRequestSuccess(false);
+      }, 3000);
+    } catch (err) {
+      setRequestError(err instanceof Error ? err.message : 'Failed to create request');
+    } finally {
+      setRequestSubmitting(false);
+    }
+  };
+
+  const handleLoginForRequest = async () => {
+    await login('HOSPITAL_COORDINATOR');
+    // After login, the request modal will stay open and user can submit
   };
 
   return (
@@ -441,6 +499,14 @@ export function BloodAvailabilityPage({ initialSearch = '' }: { initialSearch?: 
                   <Eye className="h-3.5 w-3.5" aria-hidden="true" />
                   Details
                 </button>
+                <button
+                  type="button"
+                  onClick={() => handleRequestClick(rec)}
+                  className="clinical-btn inline-flex items-center gap-1 text-xs font-semibold bg-[#123D2B] text-white hover:bg-[#1D593E]"
+                >
+                  <PlusCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                  Request
+                </button>
               </div>
             </div>
           ))}
@@ -456,17 +522,17 @@ export function BloodAvailabilityPage({ initialSearch = '' }: { initialSearch?: 
 
           <div className="overflow-x-auto">
             <table className="w-full text-left text-sm">
-              <thead className="border-b border-[#DCE3DC] bg-[#F2F5F1] text-xs font-medium text-[#55655C]">
+<thead className="border-b border-[#DCE3DC] bg-[#F2F5F1] text-xs font-medium text-[#55655C]">
                 <tr>
-                  <th className="px-5 py-3">Facility &amp; Location</th>
+                  <th className="px-5 py-3">Facility & Location</th>
                   <th className="px-4 py-3">Group · Component</th>
                   <th className="px-4 py-3 text-right">Units (Demo)</th>
                   <th className="px-4 py-3 text-right">Stock Cover</th>
                   <th className="px-4 py-3">Status</th>
-                  <th className="px-5 py-3 text-right">Inspect</th>
+                  <th className="px-5 py-3 text-right">Actions</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-[#DCE3DC]">
+<tbody className="divide-y divide-[#DCE3DC]">
                 {records.map((rec) => (
                   <tr key={rec.id} className="hover:bg-[#F2F5F1]/60">
                     <td className="px-5 py-3.5">
@@ -485,7 +551,7 @@ export function BloodAvailabilityPage({ initialSearch = '' }: { initialSearch?: 
                     </td>
                     <td className="px-4 py-3.5 text-right font-mono-tabular">
                       <p className="font-semibold text-[#17231C]">{rec.unitsAvailable}</p>
-                      <p className="text-xs text-[#55655C]">{rec.expiringWithin72h} exp &lt;72h</p>
+                      <p className="text-xs text-[#55655C]">{rec.expiringWithin72h} exp {'<72h'}</p>
                     </td>
                     <td className="px-4 py-3.5 text-right font-mono-tabular text-[#17231C]">
                       {rec.daysOfCover.toFixed(1)}d
@@ -494,13 +560,23 @@ export function BloodAvailabilityPage({ initialSearch = '' }: { initialSearch?: 
                       <RiskStatusIndicator level={rec.riskLevel} />
                     </td>
                     <td className="px-5 py-3.5 text-right">
-                      <button
-                        type="button"
-                        onClick={() => setDetailRecord(rec)}
-                        className="text-xs font-semibold text-[#123D2B] hover:underline"
-                      >
-                        Details
-                      </button>
+                      <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setDetailRecord(rec)}
+                          className="text-xs font-semibold text-[#123D2B] hover:underline"
+                        >
+                          Details
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleRequestClick(rec)}
+                          className="clinical-btn inline-flex items-center gap-1 px-3 py-1.5 text-xs font-semibold bg-[#123D2B] text-white hover:bg-[#1D593E] rounded-lg"
+                        >
+                          <PlusCircle className="h-3.5 w-3.5" aria-hidden="true" />
+                          Request
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -584,6 +660,131 @@ export function BloodAvailabilityPage({ initialSearch = '' }: { initialSearch?: 
               Availability shown is synthetic demonstration data. Confirm live compatibility and
               unit release directly with the blood center laboratory.
             </p>
+          </div>
+        ) : null}
+      </ModalDialog>
+
+      {/* Blood Request Modal */}
+      <ModalDialog
+        open={Boolean(requestRecord)}
+        onClose={() => setRequestRecord(null)}
+        title={isAuthenticated ? 'Create Blood Request' : 'Authentication Required'}
+        subtitle={
+          requestRecord
+            ? `${requestRecord.facilityName} · ${requestRecord.bloodGroup} ${BLOOD_COMPONENT_LABELS[requestRecord.component]}`
+            : undefined
+        }
+      >
+        {requestRecord ? (
+          <div className="space-y-4 text-xs">
+            <div className="rounded-lg border border-[#DCE3DC] bg-[#F2F5F1] p-3">
+              <p className="text-[#55655C]">Blood Group</p>
+              <p className="mt-1 font-mono-tabular text-base font-bold text-[#123D2B]">
+                {requestRecord.bloodGroup}
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              <div className="rounded-lg border border-[#DCE3DC] bg-[#F2F5F1] p-3">
+                <p className="text-[#55655C]">Component</p>
+                <p className="mt-1 font-medium text-[#17231C]">
+                  {BLOOD_COMPONENT_LABELS[requestRecord.component]}
+                </p>
+              </div>
+              <div className="rounded-lg border border-[#DCE3DC] bg-[#F2F5F1] p-3">
+                <p className="text-[#55655C]">Available Units</p>
+                <p className="mt-1 font-mono-tabular text-base font-bold text-[#17231C]">
+                  {requestRecord.unitsAvailable}u
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2 rounded-lg border border-[#DCE3DC] bg-white p-3.5">
+              <div className="flex items-center justify-between">
+                <span className="text-[#55655C]">Source Facility</span>
+                <span className="font-medium text-[#17231C]">{requestRecord.facilityName}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[#55655C]">Location</span>
+                <span className="font-medium text-[#17231C]">{requestRecord.city}, {requestRecord.state}</span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-[#55655C]">Availability Status</span>
+                <RiskStatusIndicator level={requestRecord.riskLevel} />
+              </div>
+            </div>
+
+            {!isAuthenticated ? (
+              <div className="space-y-3">
+                <p className="rounded-lg border border-[#B45309]/25 bg-[#FEFCE8] p-3 text-[#B45309] leading-relaxed">
+                  <span className="font-semibold">Login Required:</span> You must be signed in as a Hospital Coordinator to create blood requests.
+                </p>
+                <button
+                  type="button"
+                  onClick={handleLoginForRequest}
+                  className="clinical-btn w-full inline-flex items-center justify-center gap-2 min-h-[40px] rounded-lg bg-[#123D2B] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1D593E]"
+                >
+                  <Shield className="h-4 w-4" />
+                  Sign In as Hospital Coordinator
+                </button>
+              </div>
+            ) : requestSuccess ? (
+              <div className="space-y-3">
+                <p className="rounded-lg border border-[#1D593E]/25 bg-[#F2F5F1] p-3 text-[#17231C] leading-relaxed">
+                  <span className="font-semibold text-[#123D2B]">Request Created Successfully!</span> Your blood request has been submitted and logged in the audit trail. The blood bank will review and respond shortly.
+                </p>
+                <p className="text-xs font-mono-tabular text-[#55655C]">Closing in 3 seconds...</p>
+              </div>
+            ) : requestError ? (
+              <div className="space-y-3">
+                <p className="rounded-lg border border-[#C93440]/25 bg-[#FEF2F2] p-3 text-[#C93440] leading-relaxed">
+                  <span className="font-semibold">Error:</span> {requestError}
+                </p>
+                <button
+                  type="button"
+                  onClick={handleSubmitRequest}
+                  disabled={requestSubmitting}
+                  className="clinical-btn w-full inline-flex items-center justify-center gap-2 min-h-[40px] rounded-lg bg-[#C93440] px-4 py-2 text-sm font-semibold text-white hover:bg-[#B02D3A]"
+                >
+                  <AlertCircle className="h-4 w-4" />
+                  Retry Request
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                <p className="rounded-lg border border-[#1D593E]/25 bg-[#F2F5F1] p-3 text-[#17231C] leading-relaxed">
+                  <span className="font-semibold text-[#123D2B]">Confirm Request:</span> This will create a blood request for {requestRecord.unitsAvailable} units of {requestRecord.bloodGroup} {BLOOD_COMPONENT_LABELS[requestRecord.component]} from {requestRecord.facilityName}.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={handleSubmitRequest}
+                    disabled={requestSubmitting}
+                    className="clinical-btn flex-1 inline-flex items-center justify-center gap-2 min-h-[40px] rounded-lg bg-[#123D2B] px-4 py-2 text-sm font-semibold text-white hover:bg-[#1D593E]"
+                  >
+                    {requestSubmitting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Submitting...
+                      </>
+                    ) : (
+                      <>
+                        <PlusCircle className="h-4 w-4" />
+                        Confirm Request
+                      </>
+                    )}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setRequestRecord(null)}
+                    className="clinical-btn inline-flex items-center justify-center gap-2 min-h-[40px] rounded-lg border border-[#DCE3DC] bg-white px-4 py-2 text-sm font-semibold text-[#17231C] hover:bg-[#F2F5F1]"
+                  >
+                    <ExternalLink className="h-4 w-4" />
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         ) : null}
       </ModalDialog>

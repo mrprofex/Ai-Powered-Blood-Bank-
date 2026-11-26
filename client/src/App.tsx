@@ -58,6 +58,9 @@ import {
   getSavedPaletteId,
   type PaletteId,
 } from './theme/palettes.ts';
+import { AuthProvider, useAuth } from './context/AuthContext.tsx';
+import { ProtectedRoute } from './components/auth/ProtectedRoute.tsx';
+import { ChatSupportWidget } from './components/ui/ChatSupportWidget.tsx';
 
 const VALID_PAGES: AppPage[] = [
   'landing',
@@ -102,14 +105,64 @@ function getPageFromHash(): AppPage {
   return VALID_PAGES.includes(hash) ? hash : 'landing';
 }
 
-export function ClientApp() {
+const PANEL_ROUTES: AppPage[] = [
+  'hospital',
+  'hospital-create-request',
+  'requests',
+  'hospital-request-tracking',
+  'predictions-7d',
+  'predictions-30d',
+  'shortage-alerts',
+  'blood-bank',
+  'bank-inventory-overview',
+  'bank-update-stock',
+  'bank-group-inventory',
+  'bank-expiry-management',
+  'bank-records',
+  'admin',
+  'admin-hospitals',
+  'admin-blood-banks',
+  'predictions',
+  'admin-verification',
+  'admin-users',
+  'admin-roles',
+  'admin-audit-logs',
+  'admin-system',
+  'notifications',
+  'reports',
+  'settings',
+];
+
+function getAllowedRolesForPage(page: AppPage): UserRole[] {
+  if (page.startsWith('hospital') || page === 'requests' || page === 'hospital-request-tracking') {
+    return ['HOSPITAL_COORDINATOR', 'ADMIN'];
+  }
+  if (page.startsWith('bank-') || page === 'blood-bank') {
+    return ['BLOOD_BANK_OFFICER', 'ADMIN'];
+  }
+  if (page.startsWith('admin-') || page === 'admin') {
+    return ['ADMIN'];
+  }
+  if (page === 'predictions-7d' || page === 'predictions-30d' || page === 'predictions') {
+    return ['HOSPITAL_COORDINATOR', 'BLOOD_BANK_OFFICER', 'ADMIN'];
+  }
+  if (page === 'shortage-alerts' || page === 'notifications') {
+    return ['HOSPITAL_COORDINATOR', 'BLOOD_BANK_OFFICER', 'ADMIN'];
+  }
+  if (page === 'reports' || page === 'settings') {
+    return ['HOSPITAL_COORDINATOR', 'BLOOD_BANK_OFFICER', 'ADMIN'];
+  }
+  return ['HOSPITAL_COORDINATOR', 'BLOOD_BANK_OFFICER', 'ADMIN'];
+}
+
+function AppContent() {
   const [currentPage, setCurrentPage] = useState<AppPage>('landing');
-  const [demoUser, setDemoUser] = useState<DemoSessionUser>(
-    ROLE_DEMO_PERSONAS.HOSPITAL_COORDINATOR,
-  );
   const [loginRole, setLoginRole] = useState<UserRole>('HOSPITAL_COORDINATOR');
   const [availabilitySearch, setAvailabilitySearch] = useState<string>('');
   const [paletteId, setPaletteId] = useState<PaletteId>(getSavedPaletteId);
+  const { user, login, isAuthenticated } = useAuth();
+
+  const demoUser = user || ROLE_DEMO_PERSONAS.HOSPITAL_COORDINATOR;
 
   useEffect(() => {
     applyPalette(paletteId);
@@ -155,10 +208,10 @@ export function ClientApp() {
     }
   };
 
-  const handleDemoAuthenticate = (user: DemoSessionUser, targetPage: AppPage) => {
-    setDemoUser(user);
+  const handleDemoAuthenticate = (authUser: DemoSessionUser, targetPage: AppPage) => {
     const resolvedTarget =
-      targetPage === 'dashboard' ? getDefaultPageForRole(user.role) : targetPage;
+      targetPage === 'dashboard' ? getDefaultPageForRole(authUser.role) : targetPage;
+    login(authUser.role);
     setCurrentPage(resolvedTarget);
     if (typeof window !== 'undefined') {
       window.location.hash = resolvedTarget;
@@ -168,7 +221,7 @@ export function ClientApp() {
 
   const handleSwitchRole = (role: UserRole) => {
     const nextPersona = ROLE_DEMO_PERSONAS[role];
-    setDemoUser(nextPersona);
+    login(role);
     const targetPage = getDefaultPageForRole(role);
     setCurrentPage(targetPage);
     if (typeof window !== 'undefined') {
@@ -183,7 +236,7 @@ export function ClientApp() {
     searchQuery?: string,
   ) => {
     const nextPersona = ROLE_DEMO_PERSONAS[role];
-    setDemoUser(nextPersona);
+    login(role);
     if (typeof searchQuery === 'string') {
       setAvailabilitySearch(searchQuery);
     }
@@ -192,6 +245,15 @@ export function ClientApp() {
       window.location.hash = targetPage;
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
+  };
+
+  const handleSignOut = () => {
+    login('PUBLIC' as UserRole);
+    navigate('landing');
+  };
+
+  const handleLoginRequired = (role: UserRole) => {
+    navigateToRoleSignIn(role);
   };
 
   if (currentPage === 'landing') {
@@ -205,6 +267,7 @@ export function ClientApp() {
           activePaletteId={paletteId}
           onChangePalette={setPaletteId}
         />
+        <ChatSupportWidget onNavigate={navigate} onLoginRequired={handleLoginRequired} />
       </>
     );
   }
@@ -234,6 +297,8 @@ export function ClientApp() {
   const effectivePage: AppPage =
     currentPage === 'dashboard' ? getDefaultPageForRole(demoUser.role) : currentPage;
   const routeAllowed = isPageAllowedForRole(demoUser.role, effectivePage);
+  const isPanelRoute = PANEL_ROUTES.includes(effectivePage);
+  const allowedRoles = getAllowedRolesForPage(effectivePage);
 
   return (
     <>
@@ -244,7 +309,7 @@ export function ClientApp() {
         onQuickSearch={handleQuickSearch}
         demoUser={demoUser}
         onSwitchRole={handleSwitchRole}
-        onSignOutDemo={() => navigate('landing')}
+        onSignOutDemo={handleSignOut}
         activePaletteId={paletteId}
         onChangePalette={setPaletteId}
       >
@@ -274,7 +339,7 @@ export function ClientApp() {
           </section>
         ) : (
         <>
-          {/* Public Searcher Workspace */}
+          {/* Public Searcher Workspace (no auth required) */}
           {effectivePage === 'public-dashboard' && (
             <PublicDashboardView onNavigate={navigate} />
           )}
@@ -282,95 +347,113 @@ export function ClientApp() {
           {effectivePage === 'public-nearby-banks' && <NearbyBloodBanksView />}
           {effectivePage === 'public-emergency-info' && <EmergencyInformationView />}
 
-          {/* Shared Scoped Availability */}
+          {/* Shared Scoped Availability (no auth required for viewing) */}
           {effectivePage === 'availability' && (
             <BloodAvailabilityPage initialSearch={availabilitySearch} />
           )}
 
-          {/* Hospital Coordinator Workspace */}
-          {effectivePage === 'hospital' && (
-            <HospitalDashboard demoUser={demoUser} onNavigate={navigate} />
-          )}
-          {effectivePage === 'hospital-create-request' && (
-            <CreateBloodRequestView demoUser={demoUser} onNavigate={navigate} />
-          )}
-          {effectivePage === 'hospital-request-tracking' && (
-            <HospitalRequestTrackingView demoUser={demoUser} onNavigate={navigate} />
-          )}
+          {/* Protected Panel Routes */}
+          {isPanelRoute && (
+            <ProtectedRoute
+              allowedRoles={allowedRoles}
+              fallbackPage="login"
+              onNavigate={navigate}
+            >
+              {/* Hospital Coordinator Workspace */}
+              {effectivePage === 'hospital' && (
+                <HospitalDashboard demoUser={demoUser} onNavigate={navigate} />
+              )}
+              {effectivePage === 'hospital-create-request' && (
+                <CreateBloodRequestView demoUser={demoUser} onNavigate={navigate} />
+              )}
+              {effectivePage === 'hospital-request-tracking' && (
+                <HospitalRequestTrackingView demoUser={demoUser} onNavigate={navigate} />
+              )}
 
-          {/* Blood Bank Officer Workspace */}
-          {effectivePage === 'blood-bank' && (
-            <BloodBankDashboard demoUser={demoUser} onNavigate={navigate} />
-          )}
-          {effectivePage === 'bank-inventory-overview' && (
-            <BankInventoryOverviewView demoUser={demoUser} onNavigate={navigate} />
-          )}
-          {effectivePage === 'bank-update-stock' && (
-            <BankUpdateStockView demoUser={demoUser} />
-          )}
-          {effectivePage === 'bank-group-inventory' && (
-            <BankGroupInventoryView demoUser={demoUser} onNavigate={navigate} />
-          )}
-          {effectivePage === 'bank-expiry-management' && (
-            <BankExpiryManagementView demoUser={demoUser} onNavigate={navigate} />
-          )}
-          {effectivePage === 'bank-records' && <BankRecordsView demoUser={demoUser} />}
+              {/* Blood Bank Officer Workspace */}
+              {effectivePage === 'blood-bank' && (
+                <BloodBankDashboard demoUser={demoUser} onNavigate={navigate} />
+              )}
+              {effectivePage === 'bank-inventory-overview' && (
+                <BankInventoryOverviewView demoUser={demoUser} onNavigate={navigate} />
+              )}
+              {effectivePage === 'bank-update-stock' && (
+                <BankUpdateStockView demoUser={demoUser} />
+              )}
+              {effectivePage === 'bank-group-inventory' && (
+                <BankGroupInventoryView demoUser={demoUser} onNavigate={navigate} />
+              )}
+              {effectivePage === 'bank-expiry-management' && (
+                <BankExpiryManagementView demoUser={demoUser} onNavigate={navigate} />
+              )}
+              {effectivePage === 'bank-records' && <BankRecordsView demoUser={demoUser} />}
 
-          {/* Network Admin Workspace */}
-          {effectivePage === 'admin' && (
-            <AdminDashboard demoUser={demoUser} onNavigate={navigate} />
-          )}
-          {effectivePage === 'admin-hospitals' && (
-            <AdminHospitalsView demoUser={demoUser} />
-          )}
-          {effectivePage === 'admin-blood-banks' && (
-            <AdminBloodBanksView demoUser={demoUser} />
-          )}
-          {effectivePage === 'admin-verification' && (
-            <AdminVerificationView demoUser={demoUser} />
-          )}
-          {effectivePage === 'admin-users' && <AdminUsersView demoUser={demoUser} />}
-          {effectivePage === 'admin-roles' && <AdminRolesView />}
-          {effectivePage === 'admin-audit-logs' && (
-            <AdminAuditLogsView demoUser={demoUser} />
-          )}
-          {effectivePage === 'admin-system' && (
-            <AdminSystemView
-              demoUser={demoUser}
-              onSignOutDemo={() => navigate('landing')}
-            />
-          )}
+              {/* Network Admin Workspace */}
+              {effectivePage === 'admin' && (
+                <AdminDashboard demoUser={demoUser} onNavigate={navigate} />
+              )}
+              {effectivePage === 'admin-hospitals' && (
+                <AdminHospitalsView demoUser={demoUser} />
+              )}
+              {effectivePage === 'admin-blood-banks' && (
+                <AdminBloodBanksView demoUser={demoUser} />
+              )}
+              {effectivePage === 'admin-verification' && (
+                <AdminVerificationView demoUser={demoUser} />
+              )}
+              {effectivePage === 'admin-users' && <AdminUsersView demoUser={demoUser} />}
+              {effectivePage === 'admin-roles' && <AdminRolesView />}
+              {effectivePage === 'admin-audit-logs' && (
+                <AdminAuditLogsView demoUser={demoUser} />
+              )}
+              {effectivePage === 'admin-system' && (
+                <AdminSystemView
+                  demoUser={demoUser}
+                  onSignOutDemo={() => navigate('landing')}
+                />
+              )}
 
-          {/* Shared Role-Scoped Operations, Forecasting, Alerts, Reports & Settings */}
-          {effectivePage === 'requests' && (
-            <EmergencyRequestsView demoUser={demoUser} onNavigate={navigate} />
-          )}
-          {effectivePage === 'predictions' && (
-            <PredictionsWorkspace demoUser={demoUser} initialPeriod="7d" />
-          )}
-          {effectivePage === 'predictions-7d' && (
-            <PredictionsWorkspace demoUser={demoUser} initialPeriod="7d" />
-          )}
-          {effectivePage === 'predictions-30d' && (
-            <PredictionsWorkspace demoUser={demoUser} initialPeriod="30d" />
-          )}
-          {effectivePage === 'shortage-alerts' && (
-            <NotificationsCenterPage role={demoUser.role} shortageAlertsOnly />
-          )}
-          {effectivePage === 'notifications' && (
-            <NotificationsCenterPage role={demoUser.role} />
-          )}
-          {effectivePage === 'reports' && <RoleReportsView demoUser={demoUser} />}
-          {effectivePage === 'settings' && (
-            <RoleSettingsView
-              demoUser={demoUser}
-              onSignOutDemo={() => navigate('landing')}
-            />
+              {/* Shared Role-Scoped Operations, Forecasting, Alerts, Reports & Settings */}
+              {effectivePage === 'requests' && (
+                <EmergencyRequestsView demoUser={demoUser} onNavigate={navigate} />
+              )}
+              {effectivePage === 'predictions' && (
+                <PredictionsWorkspace demoUser={demoUser} initialPeriod="7d" />
+              )}
+              {effectivePage === 'predictions-7d' && (
+                <PredictionsWorkspace demoUser={demoUser} initialPeriod="7d" />
+              )}
+              {effectivePage === 'predictions-30d' && (
+                <PredictionsWorkspace demoUser={demoUser} initialPeriod="30d" />
+              )}
+              {effectivePage === 'shortage-alerts' && (
+                <NotificationsCenterPage role={demoUser.role} shortageAlertsOnly />
+              )}
+              {effectivePage === 'notifications' && (
+                <NotificationsCenterPage role={demoUser.role} />
+              )}
+              {effectivePage === 'reports' && <RoleReportsView demoUser={demoUser} />}
+              {effectivePage === 'settings' && (
+                <RoleSettingsView
+                  demoUser={demoUser}
+                  onSignOutDemo={() => navigate('landing')}
+                />
+              )}
+            </ProtectedRoute>
           )}
         </>
         )}
       </AppShell>
+      <ChatSupportWidget onNavigate={navigate} onLoginRequired={handleLoginRequired} />
     </>
+  );
+}
+
+export function ClientApp() {
+  return (
+    <AuthProvider>
+      <AppContent />
+    </AuthProvider>
   );
 }
 
