@@ -39,6 +39,7 @@ import type { AppPage } from '../types/navigation.ts';
 
 interface LandingPageProps {
   onNavigate: (page: AppPage) => void;
+  onSignInForRole: (role: UserRole) => void;
   onEnterWorkspaceRole?: (role: UserRole, targetPage: AppPage, searchQuery?: string) => void;
   activePaletteId: PaletteId;
   onChangePalette: (id: PaletteId) => void;
@@ -48,6 +49,7 @@ type FooterDocKey = 'about' | 'contact' | 'privacy' | 'terms' | 'emergency' | nu
 
 export function LandingPage({
   onNavigate,
+  onSignInForRole,
   onEnterWorkspaceRole,
   activePaletteId,
   onChangePalette,
@@ -71,6 +73,10 @@ export function LandingPage({
   }, []);
 
   const openPortal = (role: UserRole, page: AppPage, searchQuery?: string) => {
+    if (role !== 'PUBLIC') {
+      onSignInForRole(role);
+      return;
+    }
     if (onEnterWorkspaceRole) {
       onEnterWorkspaceRole(role, page, searchQuery);
     } else {
@@ -145,10 +151,10 @@ export function LandingPage({
             <Magnet>
               <button
                 type="button"
-                onClick={() => onNavigate('dashboard')}
+                onClick={() => onSignInForRole('HOSPITAL_COORDINATOR')}
                 className="clinical-btn inline-flex min-h-[38px] items-center gap-2 rounded-lg bg-[var(--bn-primary)] px-4 py-2 text-xs sm:text-sm font-semibold text-white hover:bg-[var(--bn-secondary)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--bn-primary)] whitespace-nowrap shrink-0 shadow-sm"
               >
-                Open Dashboard
+                Sign In
                 <ArrowRight className="h-4 w-4 shrink-0" aria-hidden="true" />
               </button>
             </Magnet>
@@ -158,7 +164,24 @@ export function LandingPage({
 
       <main>
         {/* Centered clinical network hero */}
-        <section className="relative overflow-hidden border-b border-[var(--bn-border)] bg-gradient-to-b from-[var(--bn-soft-bg)]/70 via-white to-white">
+        <section className="relative isolate min-h-[calc(100svh-4rem)] overflow-hidden border-b border-[var(--bn-border)] bg-[var(--bn-soft-bg)]">
+          {!heroImgError ? (
+            <motion.img
+              initial={{ scale: 1.04 }}
+              animate={{ scale: 1 }}
+              transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
+              src="/src/assets/images/hero_green_clinical_network_1795672723523.jpg"
+              alt=""
+              aria-hidden="true"
+              referrerPolicy="no-referrer"
+              onError={() => setHeroImgError(true)}
+              className="pointer-events-none absolute inset-0 z-0 h-full w-full object-cover object-center"
+            />
+          ) : null}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none absolute inset-0 z-0 bg-white/55"
+          />
           <div
             aria-hidden="true"
             className="pointer-events-none absolute inset-0 clinical-dot-grid opacity-30"
@@ -173,27 +196,10 @@ export function LandingPage({
             <DemoNoticeBanner context="India Healthcare Coordination Foundation" compact variant="light" />
 
             <FadeContent>
-              <div className="relative isolate overflow-hidden rounded-[26px] border border-[var(--bn-accent)]/55 bg-[var(--bn-primary-deep)] shadow-[0_24px_70px_-24px_rgba(14,50,36,0.32)]">
-                {!heroImgError ? (
-                  <motion.img
-                    initial={{ scale: 1.04 }}
-                    animate={{ scale: 1 }}
-                    transition={{ duration: 0.9, ease: [0.16, 1, 0.3, 1] }}
-                    src="/src/assets/images/hero_green_clinical_network_1795672723523.jpg"
-                    alt="Bright, modern hospital blood bank and coordination center"
-                    referrerPolicy="no-referrer"
-                    onError={() => setHeroImgError(true)}
-                    className="absolute inset-0 -z-20 h-full w-full object-cover"
-                  />
-                ) : (
-                  <div
-                    aria-hidden="true"
-                    className="absolute inset-0 -z-20 bg-gradient-to-br from-[var(--bn-secondary)] to-[var(--bn-primary-deep)]"
-                  />
-                )}
+              <div className="relative isolate overflow-hidden rounded-[26px] border border-[var(--bn-accent)]/55 bg-[var(--bn-primary-deep)]/25 shadow-[0_24px_70px_-24px_rgba(14,50,36,0.32)]">
                 <div
                   aria-hidden="true"
-                  className="absolute inset-0 -z-10 bg-gradient-to-b from-[var(--bn-primary-deep)]/50 via-[var(--bn-primary-deep)]/55 to-[var(--bn-primary-deep)]/80"
+                  className="absolute inset-0 -z-10 bg-gradient-to-b from-[var(--bn-primary-deep)]/65 via-[var(--bn-primary-deep)]/70 to-[var(--bn-primary-deep)]/80"
                 />
 
                 <div className="flex min-h-[500px] flex-col items-center justify-center px-5 py-12 text-center text-white sm:px-10 sm:py-14 lg:min-h-[530px]">

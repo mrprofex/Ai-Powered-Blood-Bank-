@@ -96,17 +96,18 @@ const VALID_PAGES: AppPage[] = [
   'settings',
 ];
 
-function getInitialPage(): AppPage {
+function getPageFromHash(): AppPage {
   if (typeof window === 'undefined') return 'landing';
   const hash = window.location.hash.replace('#', '') as AppPage;
   return VALID_PAGES.includes(hash) ? hash : 'landing';
 }
 
 export function ClientApp() {
-  const [currentPage, setCurrentPage] = useState<AppPage>(getInitialPage);
+  const [currentPage, setCurrentPage] = useState<AppPage>('landing');
   const [demoUser, setDemoUser] = useState<DemoSessionUser>(
     ROLE_DEMO_PERSONAS.HOSPITAL_COORDINATOR,
   );
+  const [loginRole, setLoginRole] = useState<UserRole>('HOSPITAL_COORDINATOR');
   const [availabilitySearch, setAvailabilitySearch] = useState<string>('');
   const [paletteId, setPaletteId] = useState<PaletteId>(getSavedPaletteId);
 
@@ -115,8 +116,16 @@ export function ClientApp() {
   }, [paletteId]);
 
   useEffect(() => {
+    if (window.location.hash) {
+      window.history.replaceState(
+        null,
+        '',
+        `${window.location.pathname}${window.location.search}`,
+      );
+    }
+
     const onHashChange = () => {
-      setCurrentPage(getInitialPage());
+      setCurrentPage(getPageFromHash());
     };
     window.addEventListener('hashchange', onHashChange);
     return () => window.removeEventListener('hashchange', onHashChange);
@@ -130,6 +139,11 @@ export function ClientApp() {
       window.location.hash = resolvedPage === 'landing' ? '' : resolvedPage;
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
+  };
+
+  const navigateToRoleSignIn = (role: UserRole) => {
+    setLoginRole(role);
+    navigate('login');
   };
 
   const handleQuickSearch = (term: string) => {
@@ -186,6 +200,7 @@ export function ClientApp() {
         <TargetCursor />
         <LandingPage
           onNavigate={navigate}
+          onSignInForRole={navigateToRoleSignIn}
           onEnterWorkspaceRole={handleEnterWorkspaceFromLanding}
           activePaletteId={paletteId}
           onChangePalette={setPaletteId}
@@ -198,7 +213,11 @@ export function ClientApp() {
     return (
       <>
         <TargetCursor />
-        <LoginPage onNavigate={navigate} onDemoAuthenticate={handleDemoAuthenticate} />
+        <LoginPage
+          onNavigate={navigate}
+          onDemoAuthenticate={handleDemoAuthenticate}
+          initialRole={loginRole}
+        />
       </>
     );
   }

@@ -22,66 +22,30 @@ import { getDefaultPageForRole, type AppPage } from '../types/navigation.ts';
 interface LoginPageProps {
   onNavigate: (page: AppPage) => void;
   onDemoAuthenticate: (user: DemoSessionUser, targetPage: AppPage) => void;
+  initialRole: UserRole;
 }
 
 const DEMO_PRESETS: Array<{
   label: string;
   role: UserRole;
-  name: string;
-  email: string;
-  org: string;
-  city: string;
-  target: AppPage;
 }> = [
-  {
-    label: 'Public Searcher',
-    role: 'PUBLIC',
-    name: ROLE_DEMO_PERSONAS.PUBLIC.name,
-    email: ROLE_DEMO_PERSONAS.PUBLIC.email,
-    org: ROLE_DEMO_PERSONAS.PUBLIC.organizationName,
-    city: ROLE_DEMO_PERSONAS.PUBLIC.city,
-    target: 'public-dashboard',
-  },
-  {
-    label: 'Hospital Coordinator',
-    role: 'HOSPITAL_COORDINATOR',
-    name: ROLE_DEMO_PERSONAS.HOSPITAL_COORDINATOR.name,
-    email: ROLE_DEMO_PERSONAS.HOSPITAL_COORDINATOR.email,
-    org: ROLE_DEMO_PERSONAS.HOSPITAL_COORDINATOR.organizationName,
-    city: ROLE_DEMO_PERSONAS.HOSPITAL_COORDINATOR.city,
-    target: 'hospital',
-  },
-  {
-    label: 'Blood Bank Officer',
-    role: 'BLOOD_BANK_OFFICER',
-    name: ROLE_DEMO_PERSONAS.BLOOD_BANK_OFFICER.name,
-    email: ROLE_DEMO_PERSONAS.BLOOD_BANK_OFFICER.email,
-    org: ROLE_DEMO_PERSONAS.BLOOD_BANK_OFFICER.organizationName,
-    city: ROLE_DEMO_PERSONAS.BLOOD_BANK_OFFICER.city,
-    target: 'blood-bank',
-  },
-  {
-    label: 'Network Admin',
-    role: 'ADMIN',
-    name: ROLE_DEMO_PERSONAS.ADMIN.name,
-    email: ROLE_DEMO_PERSONAS.ADMIN.email,
-    org: ROLE_DEMO_PERSONAS.ADMIN.organizationName,
-    city: ROLE_DEMO_PERSONAS.ADMIN.city,
-    target: 'admin',
-  },
+  { label: 'Public Searcher', role: 'PUBLIC' },
+  { label: 'Hospital Coordinator', role: 'HOSPITAL_COORDINATOR' },
+  { label: 'Blood Bank Officer', role: 'BLOOD_BANK_OFFICER' },
+  { label: 'Network Admin', role: 'ADMIN' },
 ];
 
-export function LoginPage({ onNavigate, onDemoAuthenticate }: LoginPageProps) {
-  const [email, setEmail] = useState('priya.sharma@metro-trauma-demo.in');
+export function LoginPage({ onNavigate, onDemoAuthenticate, initialRole }: LoginPageProps) {
+  const [email, setEmail] = useState(ROLE_DEMO_PERSONAS[initialRole].email);
   const [password, setPassword] = useState('demo-access-only');
   const [showPassword, setShowPassword] = useState(false);
   const [rememberMe, setRememberMe] = useState(true);
-  const [role, setRole] = useState<UserRole>('HOSPITAL_COORDINATOR');
+  const [role, setRole] = useState<UserRole>(initialRole);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [visualError, setVisualError] = useState(false);
 
   const [forgotOpen, setForgotOpen] = useState(false);
-  const [resetEmail, setResetEmail] = useState('priya.sharma@metro-trauma-demo.in');
+  const [resetEmail, setResetEmail] = useState(ROLE_DEMO_PERSONAS[initialRole].email);
   const [resetSent, setResetSent] = useState(false);
 
   const handleSubmit = (event: FormEvent) => {
@@ -369,35 +333,27 @@ export function LoginPage({ onNavigate, onDemoAuthenticate }: LoginPageProps) {
             </Magnet>
           </form>
 
-          {/* Quick Demo Role Launchers */}
+          {/* Demo Workspace Role Selection */}
           <div className="border-t border-[#DCE3DC] pt-5">
             <p className="text-xs font-semibold text-[#17231C] mb-2.5">
-              Quick Demo Role Launchers
+              Choose a Demo Workspace
             </p>
             <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               {DEMO_PRESETS.map((preset) => (
                 <button
                   key={preset.role}
                   type="button"
-                  onClick={() =>
-                    onDemoAuthenticate(
-                      {
-                        id: `demo-${preset.role.toLowerCase()}`,
-                        name: preset.name,
-                        email: preset.email,
-                        role: preset.role,
-                        organizationName: preset.org,
-                        city: preset.city,
-                        isDemoMode: true,
-                      },
-                      preset.target,
-                    )
-                  }
-                  className="clinical-card clinical-card-interactive flex min-h-[42px] items-center justify-between rounded-lg px-3 py-2 text-left text-xs"
+                  onClick={() => handleRoleChange(preset.role)}
+                  aria-pressed={role === preset.role}
+                  className={`clinical-card clinical-card-interactive flex min-h-[42px] items-center justify-between rounded-lg px-3 py-2 text-left text-xs ${
+                    role === preset.role
+                      ? 'border-[var(--bn-primary)] ring-1 ring-[var(--bn-primary)]/20'
+                      : ''
+                  }`}
                 >
                   <span className="font-semibold text-[#17231C]">{preset.label}</span>
                   <span className="font-mono-tabular text-[11px] text-[#55655C]">
-                    {preset.city}
+                    {role === preset.role ? 'Selected' : 'Select'}
                   </span>
                 </button>
               ))}
